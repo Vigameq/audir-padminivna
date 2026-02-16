@@ -1,0 +1,7 @@
+{
+  "/api": {
+    "target": "https://asia-south1-auditx-tierx.cloudfunctions.net",
+    "secure": true,
+    "changeOrigin": true
+  }
+}

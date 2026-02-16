@@ -1,0 +1,282 @@
+<section class="audit-manage">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Audit oversight</p>
+      <h1>Audit manage</h1>
+      <p class="subtitle">Track and organize all created audits.</p>
+    </div>
+  </header>
+
+  <section class="panel wide">
+    <div class="panel-header">
+      <div class="section-title">
+        <h2>Audit status</h2>
+        <span class="count">{{ totalCount }} total</span>
+      </div>
+      <div class="tab-switch">
+        <button
+          type="button"
+          [class.active]="activeTab === 'created'"
+          (click)="setTab('created')"
+        >
+          Created audits
+        </button>
+        <button
+          type="button"
+          [class.active]="activeTab === 'inProgress'"
+          (click)="setTab('inProgress')"
+        >
+          In-progress audits
+        </button>
+        <button
+          type="button"
+          [class.active]="activeTab === 'completed'"
+          (click)="setTab('completed')"
+        >
+          Completed audits
+        </button>
+      </div>
+    </div>
+    <div class="audit-grid" *ngIf="activeAudits.length; else emptyAudits">
+      <article class="audit-card compact" *ngFor="let audit of pagedAudits">
+        <div class="audit-row">
+          <div class="audit-main">
+            <div class="audit-title">
+              <span class="code">{{ audit.code }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.auditType }}</span>
+              <span *ngIf="audit.auditSubtype">
+                <span class="divider">·</span>
+                {{ audit.auditSubtype }}
+              </span>
+            </div>
+            <div class="audit-sub">
+              <span>{{ formatDate(audit.startDate) }} → {{ formatDate(audit.endDate) }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.department || '—' }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.locationCity || '—' }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.auditorName || '—' }}</span>
+              <span class="divider">·</span>
+              <a class="evidence-link" [attr.href]="'/evidence/' + audit.code">
+                Evidence index
+              </a>
+            </div>
+          </div>
+          <div class="audit-inline">
+            <div class="meta-block">
+              <span>NCs</span>
+              <strong>{{ getAuditProgress(audit).nc }}</strong>
+            </div>
+            <button
+              class="ghost small"
+              type="button"
+              (click)="openEdit(audit)"
+              [disabled]="activeTab !== 'created'"
+            >
+              Edit
+            </button>
+            <button class="ghost small" type="button" (click)="openView(audit)">View</button>
+            <button
+              class="ghost small danger"
+              type="button"
+              (click)="deleteAudit(audit)"
+              *ngIf="activeTab === 'created' && auth.role() === 'Manager'"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="pagination" *ngIf="totalCount > pageSize">
+      <button class="ghost small" type="button" (click)="prevPage()" [disabled]="pageIndex === 1">
+        Prev
+      </button>
+      <span>Page {{ pageIndex }} of {{ totalPages }}</span>
+      <button class="ghost small" type="button" (click)="nextPage()" [disabled]="pageIndex === totalPages">
+        Next
+      </button>
+    </div>
+    <ng-template #emptyAudits>
+      <div class="empty">No {{ activeTabLabel }} audits available.</div>
+    </ng-template>
+  </section>
+
+  <div class="modal-backdrop" *ngIf="activeAudit">
+    <form class="modal" #editFormRef="ngForm" (ngSubmit)="saveEdit(editFormRef)">
+      <header>
+        <h2>Edit audit</h2>
+        <button class="ghost small" type="button" (click)="closeEdit(editFormRef)">Close</button>
+      </header>
+      <p class="modal-subtitle">Audit type is read-only.</p>
+      <div class="form-grid">
+        <label>
+          Start date
+          <input type="date" name="startDate" [(ngModel)]="editForm.startDate" required />
+        </label>
+        <label>
+          End date
+          <input type="date" name="endDate" [(ngModel)]="editForm.endDate" required />
+        </label>
+        <label>
+          Audit type
+          <input type="text" name="auditType" [(ngModel)]="editForm.auditType" disabled />
+        </label>
+        <label>
+          Audit subtype
+          <select name="auditSubtype" [(ngModel)]="editForm.auditSubtype">
+            <option value="">Select audit subtype</option>
+            <option *ngFor="let subtype of auditSubtypes" [value]="subtype">
+              {{ subtype }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Response type
+          <select name="responseType" [(ngModel)]="editForm.responseType">
+            <option value="">Select response type</option>
+            <option *ngFor="let response of responses" [value]="response">
+              {{ response }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Products
+          <select name="assetScopeCount" [(ngModel)]="editForm.assetScopeCount">
+            <option *ngFor="let count of assetScopeOptions" [value]="count">
+              {{ count }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Auditor
+          <select name="auditorName" [(ngModel)]="editForm.auditorName">
+            <option value="">Select auditor</option>
+            <option
+              *ngFor="let auditor of auditors"
+              [value]="auditor.first_name + ' ' + auditor.last_name"
+            >
+              {{ auditor.first_name }} {{ auditor.last_name }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Customer
+          <select name="customerId" [(ngModel)]="editForm.customerId">
+            <option value="">Select customer</option>
+            <option *ngFor="let customer of customers" [value]="customer.email">
+              {{ customer.first_name }} {{ customer.last_name }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Department
+          <select name="department" [(ngModel)]="editForm.department">
+            <option value="">Select department</option>
+            <option *ngFor="let department of departments" [value]="department">
+              {{ department }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Country
+          <select name="country" [(ngModel)]="editForm.country">
+            <option value="">Select country</option>
+            <option value="India">India</option>
+            <option value="USA">USA</option>
+            <option value="Canada">Canada</option>
+          </select>
+        </label>
+        <label>
+          City
+          <select name="locationCity" [(ngModel)]="editForm.locationCity">
+            <option value="">Select city</option>
+            <option *ngFor="let city of cities" [value]="city">{{ city }}</option>
+          </select>
+        </label>
+        <label>
+          Site
+          <select name="site" [(ngModel)]="editForm.site">
+            <option value="">Select site</option>
+            <option *ngFor="let site of sites" [value]="site">{{ site }}</option>
+          </select>
+        </label>
+        <label>
+          Region
+          <select name="region" [(ngModel)]="editForm.region">
+            <option value="">Select region</option>
+            <option *ngFor="let region of regions" [value]="region">{{ region }}</option>
+          </select>
+        </label>
+        <label class="full">
+          Audit note
+          <textarea
+            rows="4"
+            maxlength="1000"
+            name="auditNote"
+            [(ngModel)]="editForm.auditNote"
+          ></textarea>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost" type="button" (click)="closeEdit(editFormRef)">Cancel</button>
+        <button class="primary" type="submit">Save changes</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop" *ngIf="viewAudit">
+    <div class="modal">
+      <header>
+        <h2>Audit responses</h2>
+      </header>
+      <p class="modal-subtitle">
+        {{ viewAudit.auditType }} · {{ viewAudit.auditSubtype || '—' }} ·
+        {{ formatDate(viewAudit.startDate) }} → {{ formatDate(viewAudit.endDate) }} ·
+        {{ viewAudit.department || '—' }}
+      </p>
+      <div class="view-list" *ngIf="viewResponses.length; else emptyResponses">
+        <article class="view-card" *ngFor="let response of viewResponses">
+          <div class="view-row">
+            <span>Question</span>
+            <strong>{{ response.question }}</strong>
+          </div>
+          <div class="view-grid">
+            <div>
+              <span>Response</span>
+              <strong>{{ response.response }}</strong>
+            </div>
+            <div>
+              <span>Assigned NC</span>
+              <strong>{{ response.assignedNc || '—' }}</strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong>{{ response.status || '—' }}</strong>
+            </div>
+            <div>
+              <span>NC Status</span>
+              <strong>{{ response.ncStatus || '—' }}</strong>
+            </div>
+            <div>
+              <span>Submitted</span>
+              <strong>{{ response.submittedAt | date:'medium' }}</strong>
+            </div>
+          </div>
+          <div class="view-row">
+            <span>Note</span>
+            <strong>{{ response.note || '—' }}</strong>
+          </div>
+        </article>
+      </div>
+      <ng-template #emptyResponses>
+        <div class="empty">No submitted responses for this audit yet.</div>
+      </ng-template>
+      <footer>
+        <button class="primary" type="button" (click)="closeView()">Done</button>
+      </footer>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,47 @@
+<section class="login">
+  <div class="login-panel">
+    <div class="login-brand">
+      <span class="badge">Secure Access</span>
+      <h1>Sign in to AuditX Enterprise</h1>
+      <p>Role-based access for Auditors, Managers, and Admins.</p>
+    </div>
+
+    <form class="login-form" (ngSubmit)="signIn()">
+      <label>
+        Work email
+        <input
+          type="email"
+          name="email"
+          [(ngModel)]="email"
+          placeholder="name@company.com"
+          required
+        />
+      </label>
+      <label>
+        Password
+        <input
+          type="password"
+          name="password"
+          [(ngModel)]="password"
+          placeholder="Enter your password"
+          required
+        />
+      </label>
+      <button type="submit" class="primary">Sign in</button>
+      <button type="button" class="ghost">Request access</button>
+      <p class="error" *ngIf="loginError">{{ loginError }}</p>
+    </form>
+  </div>
+
+  <aside class="login-aside">
+    <div class="accent-card">
+      <h2>Compliance at a glance</h2>
+      <p>Monitor audits, evidence, and remediation in one workspace.</p>
+      <ul>
+        <li>Audit readiness scorecards</li>
+        <li>Evidence chain of custody</li>
+        <li>Executive compliance reporting</li>
+      </ul>
+    </div>
+  </aside>
+</section>

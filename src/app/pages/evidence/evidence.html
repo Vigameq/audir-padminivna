@@ -1,0 +1,39 @@
+<section class="evidence">
+  <header class="evidence-header">
+    <div>
+      <p class="eyebrow">Evidence index</p>
+      <h1>Evidence: {{ auditCode || '—' }}</h1>
+      <p class="subtitle">Public folder link and evidence list by asset.</p>
+    </div>
+    <button class="back-link" type="button" (click)="goBack()">Back</button>
+  </header>
+
+  <div class="status" *ngIf="loading">Loading evidence…</div>
+  <div class="status error" *ngIf="!loading && error">{{ error }}</div>
+
+  <div class="empty" *ngIf="!loading && !error && !groups.length">
+    No evidence uploaded yet.
+  </div>
+
+  <div class="group-list" *ngIf="!loading && !error && groups.length">
+    <article class="group-card" *ngFor="let group of groups">
+      <div class="group-header">
+        <h2>Asset {{ group.asset }}</h2>
+        <span class="count">{{ group.items.length }} files</span>
+      </div>
+      <div class="file-grid">
+        <a class="file-card" *ngFor="let item of group.items" [href]="item.url" target="_blank" rel="noopener">
+          <div class="file-preview">
+            <img *ngIf="isImage(item)" [src]="getItemUrl(item)" [alt]="item.key" loading="lazy" />
+            <video *ngIf="isVideo(item)" [src]="getItemUrl(item)" muted></video>
+            <div class="file-fallback" *ngIf="!isImage(item) && !isVideo(item)">
+              File
+            </div>
+          </div>
+          <span class="file-name">{{ item.key.split('/').pop() }}</span>
+          <span class="file-meta">{{ item.size }} bytes</span>
+        </a>
+      </div>
+    </article>
+  </div>
+</section>

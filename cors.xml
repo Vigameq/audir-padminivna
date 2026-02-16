@@ -1,0 +1,15 @@
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedOrigin>https://auditx-tierx.web.app</AllowedOrigin>
+    <AllowedOrigin>http://localhost:4200</AllowedOrigin>
+    <AllowedMethod>GET</AllowedMethod>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedMethod>POST</AllowedMethod>
+    <AllowedMethod>HEAD</AllowedMethod>
+    <AllowedHeader>*</AllowedHeader>
+    <ExposeHeader>ETag</ExposeHeader>
+    <ExposeHeader>x-amz-request-id</ExposeHeader>
+    <MaxAgeSeconds>3000</MaxAgeSeconds>
+  </CORSRule>
+</CORSConfiguration>
+

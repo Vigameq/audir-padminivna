@@ -1,0 +1,169 @@
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <div>
+      <div class="brand-name">AuditX</div>
+      <div class="brand-subtitle">Enterprise Audit Workspace</div>
+    </div>
+  </div>
+  <div class="nav-shell" *ngIf="showNav">
+    <div class="nav-surface">
+      <nav class="app-nav">
+        <a
+          routerLink="/dashboard"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Dashboard
+        </a>
+        <a
+          routerLink="/customer-dashboard"
+          routerLinkActive="active"
+          *ngIf="auth.role() === 'Customer'"
+        >
+          Customer
+        </a>
+        <a
+          routerLink="/audit-plan"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Plan
+        </a>
+        <a
+          routerLink="/audit-manage"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Manage
+        </a>
+        <a
+          routerLink="/audit-perform"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Perform
+        </a>
+        <a
+          routerLink="/nc-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          NC Management
+        </a>
+        <a
+          routerLink="/templates"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"
+        >
+          Templates
+        </a>
+        <a routerLink="/reports" routerLinkActive="active">Reports</a>
+        <a
+          routerLink="/user-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Manager' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"
+        >
+          User Management
+        </a>
+        <a
+          routerLink="/settings"
+          routerLinkActive="active"
+          *ngIf="auth.role() === 'Super Admin'"
+        >
+          Settings
+        </a>
+      </nav>
+    </div>
+    <div class="header-actions" *ngIf="auth.isLoggedIn()">
+      <div class="notify-menu" #notifyMenu>
+        <button
+          class="notify-button"
+          type="button"
+          (click)="toggleNotifications()"
+          aria-label="Notifications"
+          [attr.aria-expanded]="isNotificationOpen"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+            class="notify-icon"
+          >
+            <path
+              d="M12 3a5 5 0 0 0-5 5v2.2c0 .8-.3 1.6-.9 2.2L4.5 14h15l-1.6-1.6c-.6-.6-.9-1.4-.9-2.2V8a5 5 0 0 0-5-5Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M9.6 17a2.4 2.4 0 0 0 4.8 0"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span class="notify-badge" *ngIf="notificationCount > 0">{{ notificationCount }}</span>
+        </button>
+        <div class="notify-dropdown" *ngIf="isNotificationOpen">
+          <div class="notify-titlebar">
+            <span>Notifications</span>
+            <span class="notify-total">{{ notificationCount }}</span>
+          </div>
+          <div class="notify-empty" *ngIf="notificationCount === 0">
+            No notifications yet.
+          </div>
+          <button
+            class="notify-item"
+            type="button"
+            *ngFor="let item of notifications"
+            (click)="openNotification(item)"
+          >
+            <span class="notify-title">{{ item.title }}</span>
+            <span class="notify-detail">{{ item.detail }}</span>
+          </button>
+        </div>
+      </div>
+      <div class="user-menu" #userMenu>
+        <button class="user-chip" type="button" (click)="toggleUserMenu()">
+          <div class="avatar">{{ avatarText }}</div>
+          <div class="user-name">{{ displayName }}</div>
+        </button>
+        <div class="user-dropdown" *ngIf="isUserMenuOpen">
+          <div class="user-detail">
+            <span>User name</span>
+            <strong>{{ fullName }}</strong>
+          </div>
+          <div class="user-detail">
+            <span>Email ID</span>
+            <strong>{{ auth.email() || '—' }}</strong>
+          </div>
+          <div class="user-detail">
+            <span>Role</span>
+            <strong>{{ auth.role() || 'User' }}</strong>
+          </div>
+          <div class="user-detail">
+            <span>Department</span>
+            <strong>{{ auth.department() || '—' }}</strong>
+          </div>
+          <button class="logout" type="button" (click)="logout()">Logout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="loader-overlay" *ngIf="loading.isLoading()">
+  <div class="loader-card">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>Loading...</span>
+  </div>
+</div>
+
+<main class="app-main">
+  <router-outlet></router-outlet>
+</main>

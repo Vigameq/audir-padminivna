@@ -1,0 +1,338 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem clamp(1.5rem, 3vw, 3.5rem);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-mark {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.9rem;
+  background: conic-gradient(
+    from 210deg,
+    var(--color-accent) 0deg,
+    var(--color-accent-soft) 120deg,
+    rgba(255, 255, 255, 0.1) 240deg,
+    var(--color-accent) 360deg
+  );
+  box-shadow: 0 12px 24px rgba(255, 154, 0, 0.2);
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+  letter-spacing: 0.01em;
+}
+
+.brand-subtitle {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav-shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-surface {
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 154, 0, 0.25);
+  padding: 0.35rem;
+  border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(255, 154, 0, 0.12);
+  max-width: min(60vw, 920px);
+}
+
+.app-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.app-nav a {
+  text-decoration: none;
+  color: var(--color-muted);
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.app-nav a:hover,
+.app-nav a.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-ink);
+  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.2);
+}
+
+.notify-menu {
+  position: relative;
+}
+
+.notify-button {
+  position: relative;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 154, 0, 0.25);
+  background: var(--color-surface);
+  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.12);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--color-muted);
+}
+
+.notify-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.notify-badge {
+  position: absolute;
+  top: -0.2rem;
+  right: -0.2rem;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-ink);
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 0.3rem;
+  box-shadow: 0 8px 16px rgba(255, 154, 0, 0.35);
+}
+
+.notify-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  width: min(320px, 70vw);
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 154, 0, 0.25);
+  border-radius: 1rem;
+  padding: 0.8rem;
+  box-shadow: 0 18px 40px rgba(255, 154, 0, 0.2);
+  display: grid;
+  gap: 0.6rem;
+  z-index: 20;
+}
+
+.notify-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.notify-total {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.notify-empty {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  padding: 0.2rem 0;
+}
+
+.notify-item {
+  border: 1px solid rgba(255, 154, 0, 0.18);
+  background: var(--color-surface)8f0;
+  border-radius: 0.8rem;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  display: grid;
+  gap: 0.25rem;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.notify-item:hover {
+  border-color: rgba(255, 154, 0, 0.5);
+  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.16);
+}
+
+.notify-title {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.notify-detail {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 154, 0, 0.25);
+  background: var(--color-surface);
+  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.12);
+  cursor: pointer;
+  font: inherit;
+}
+
+.avatar {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-surface)2df;
+  color: var(--color-muted);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.user-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  min-width: 180px;
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 154, 0, 0.25);
+  border-radius: 1rem;
+  padding: 0.8rem;
+  box-shadow: 0 18px 40px rgba(255, 154, 0, 0.2);
+  display: grid;
+  gap: 0.6rem;
+  z-index: 20;
+}
+
+.user-detail {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.user-detail span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-muted);
+}
+
+.user-detail strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.logout {
+  border: 1px solid rgba(255, 154, 0, 0.5);
+  background: var(--color-surface)6eb;
+  color: var(--color-ink);
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font: inherit;
+}
+
+.logout:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.2);
+}
+
+.app-main {
+  padding: clamp(1.5rem, 4vw, 4rem);
+}
+
+.loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.loader-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 154, 0, 0.35);
+  background: var(--color-surface);
+  box-shadow: 0 18px 40px rgba(255, 154, 0, 0.2);
+  font-weight: 600;
+}
+
+.spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 154, 0, 0.2);
+  border-top-color: var(--color-accent);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .nav-surface {
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,329 @@
+<section class="user-management">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Access control</p>
+      <h1>User management</h1>
+      <p class="subtitle">Invite users, assign roles, and review access activity.</p>
+    </div>
+    <div class="header-actions">
+      <button class="ghost">Export</button>
+      <button class="primary" (click)="openInvite()">Onboard user</button>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Active users</h2>
+      <div class="filters">
+        <input
+          type="search"
+          placeholder="Search name or email"
+          [(ngModel)]="searchTerm"
+          name="searchTerm"
+        />
+        <select [(ngModel)]="roleFilter" name="roleFilter">
+          <option value="">All roles</option>
+          <option *ngFor="let role of roles" [value]="role">{{ role }}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-row heading">
+      <span>Name</span>
+      <span>Email</span>
+      <span>Phone</span>
+      <span>Department</span>
+      <span>Role</span>
+      <span>Status</span>
+      <span>Last active</span>
+      <span>Actions</span>
+    </div>
+    <div class="table-row" *ngFor="let user of filteredUsers">
+      <span>{{ user.firstName }} {{ user.lastName }}</span>
+      <span>{{ user.email }}</span>
+      <span>{{ user.phone || '—' }}</span>
+      <span>{{ user.department }}</span>
+      <span>{{ user.role }}</span>
+      <span
+        class="status"
+        [class.active]="user.status === 'Active'"
+        [class.pending]="user.status === 'Pending'"
+        [class.suspended]="user.status === 'Suspended'"
+      >
+        {{ user.status }}
+      </span>
+      <span>{{ user.lastActive }}</span>
+      <span class="actions">
+        <button
+          class="icon-button"
+          type="button"
+          (click)="openEdit(user)"
+          aria-label="Edit user"
+          title="Edit"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M4 16.8V20h3.2l9.4-9.4-3.2-3.2L4 16.8Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M14.2 7.4 16.6 5a2 2 0 0 1 2.8 2.8l-2.4 2.4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          (click)="resetPassword(user)"
+          aria-label="Reset password"
+          title="Reset password"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M7 7h10a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M8.5 7V5.5a3.5 3.5 0 0 1 7 0V7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M12 11.5v2.2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          class="icon-button danger"
+          type="button"
+          (click)="deleteUser(user)"
+          aria-label="Delete user"
+          title="Delete"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M5 7h14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+            <path
+              d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M7.5 7l1 11a2 2 0 0 0 2 1.8h3a2 2 0 0 0 2-1.8l1-11"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </span>
+    </div>
+  </section>
+
+  <div class="modal-backdrop" *ngIf="showInviteModal">
+    <div class="modal">
+      <header>
+        <h2>Onboard user</h2>
+        <button class="icon" type="button" (click)="closeInvite()">Close</button>
+      </header>
+      <form
+        class="modal-form"
+        id="onboardForm"
+        #onboardFormRef="ngForm"
+        (ngSubmit)="onboardUser(onboardFormRef)"
+      >
+        <div class="field">
+          <label>First name <span class="req">*</span></label>
+          <input
+            type="text"
+            name="firstName"
+            [(ngModel)]="onboardForm.firstName"
+            placeholder="First name"
+            required
+          />
+        </div>
+        <div class="field">
+          <label>Last name <span class="req">*</span></label>
+          <input
+            type="text"
+            name="lastName"
+            [(ngModel)]="onboardForm.lastName"
+            placeholder="Last name"
+            required
+          />
+        </div>
+        <div class="field">
+          <label>Email ID <span class="req">*</span></label>
+          <input
+            type="email"
+            name="email"
+            [(ngModel)]="onboardForm.email"
+            placeholder="name@company.com"
+            required
+          />
+        </div>
+        <div class="field">
+          <label>Phone number</label>
+          <input
+            type="tel"
+            name="phone"
+            [(ngModel)]="onboardForm.phone"
+            placeholder="Optional"
+          />
+        </div>
+        <div class="field">
+          <label>Department <span class="req">*</span></label>
+          <select name="department" [(ngModel)]="onboardForm.department" required>
+            <option value="">Select department</option>
+            <option *ngFor="let department of departments" [value]="department">
+              {{ department }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Role <span class="req">*</span></label>
+          <select name="role" [(ngModel)]="onboardForm.role" required>
+            <option value="">Select role</option>
+            <option>Auditor</option>
+            <option>Manager</option>
+            <option>Customer</option>
+            <option>Super Admin</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Create password <span class="req">*</span></label>
+          <input
+            type="password"
+            name="password"
+            [(ngModel)]="onboardForm.password"
+            placeholder="Set a temporary password"
+            required
+          />
+        </div>
+        <div class="field">
+          <label>Status <span class="req">*</span></label>
+          <select name="status" [(ngModel)]="onboardForm.status" required>
+            <option value="">Select status</option>
+            <option>Active</option>
+            <option>Pending</option>
+            <option>Suspended</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Last active</label>
+          <input type="text" placeholder="Set after first login" disabled />
+        </div>
+      </form>
+      <footer>
+        <button class="ghost" type="button" (click)="closeInvite()">Cancel</button>
+        <button class="primary" type="submit" form="onboardForm">
+          Onboard user
+        </button>
+      </footer>
+      <p class="error" *ngIf="onboardError">{{ onboardError }}</p>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" *ngIf="showEditModal && selectedUser">
+    <div class="modal">
+      <header>
+        <h2>Edit user</h2>
+        <button class="icon" type="button" (click)="closeEdit()">Close</button>
+      </header>
+      <form class="modal-form" *ngIf="editForm">
+        <div class="field">
+          <label>First name <span class="req">*</span></label>
+          <input
+            type="text"
+            name="editFirstName"
+            [(ngModel)]="editForm.firstName"
+            required
+          />
+        </div>
+        <div class="field">
+          <label>Last name <span class="req">*</span></label>
+          <input
+            type="text"
+            name="editLastName"
+            [(ngModel)]="editForm.lastName"
+            required
+          />
+        </div>
+        <div class="field">
+          <label>Email ID</label>
+          <input type="email" [value]="editForm.email" disabled />
+        </div>
+        <div class="field">
+          <label>Phone number</label>
+          <input
+            type="tel"
+            name="editPhone"
+            [(ngModel)]="editForm.phone"
+            placeholder="Optional"
+          />
+        </div>
+        <div class="field">
+          <label>Department <span class="req">*</span></label>
+          <select name="editDepartment" [(ngModel)]="editForm.department" required>
+            <option value="">Select department</option>
+            <option *ngFor="let department of departments" [value]="department">
+              {{ department }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Role <span class="req">*</span></label>
+          <select name="editRole" [(ngModel)]="editForm.role" required>
+            <option *ngFor="let role of roles" [value]="role">{{ role }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Status <span class="req">*</span></label>
+          <select name="editStatus" [(ngModel)]="editForm.status" required>
+            <option value="Active">Active</option>
+            <option value="Pending">Pending</option>
+            <option value="Suspended">Suspended</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Last active</label>
+          <input type="text" [value]="editForm.lastActive" disabled />
+        </div>
+      </form>
+      <footer>
+        <button class="ghost" type="button" (click)="closeEdit()">Cancel</button>
+        <button class="primary" type="button" (click)="saveEdit()">Save changes</button>
+      </footer>
+    </div>
+  </div>
+</section>

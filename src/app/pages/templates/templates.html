@@ -1,0 +1,203 @@
+<section class="templates">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Audit templates</p>
+      <h1>Templates</h1>
+      <p class="subtitle">Import spreadsheet questions for audit execution.</p>
+    </div>
+    <div class="header-actions">
+      <button class="primary" type="button" (click)="openImportModal()">
+        Import
+      </button>
+    </div>
+  </header>
+
+  <section class="panel" *ngIf="templates.length">
+    <div class="panel-header">
+      <h2>Saved templates</h2>
+      <span class="count">{{ templates.length }} total</span>
+    </div>
+    <div class="template-list">
+      <article class="template-item" *ngFor="let template of templates; trackBy: trackByTemplateId">
+        <div class="template-summary" (click)="toggleTemplate(template.id)">
+          <h3>{{ template.name }}</h3>
+          <p>{{ template.questions.length }} questions</p>
+          <p class="note-text" *ngIf="template.note">{{ template.note }}</p>
+          <div class="tag-list" *ngIf="template.tags.length">
+            <span class="tag" *ngFor="let tag of template.tags">{{ tag }}</span>
+          </div>
+        </div>
+        <ng-container *ngIf="expandedTemplateId === template.id">
+          <ol class="question-list" *ngIf="editingTemplateId !== template.id">
+            <li *ngFor="let question of template.questions">{{ question }}</li>
+          </ol>
+          <div
+            class="template-edit"
+            *ngIf="editingTemplateId === template.id"
+            (click)="$event.stopPropagation()"
+          >
+            <label>
+              Template name
+              <input
+                type="text"
+                [(ngModel)]="editName"
+                name="edit-name-{{ template.id }}"
+                (click)="$event.stopPropagation()"
+              />
+            </label>
+            <div class="question-edit">
+              <div class="question-edit-header">
+                <span>Questions</span>
+                <button class="ghost small" type="button" (click)="addQuestion(); $event.stopPropagation()">
+                  Add question
+                </button>
+              </div>
+              <div class="question-edit-list">
+                <div class="question-edit-row" *ngFor="let question of editQuestions; let i = index; trackBy: trackByIndex">
+                  <input
+                    type="text"
+                    [(ngModel)]="editQuestions[i]"
+                    name="edit-question-{{ template.id }}-{{ i }}"
+                    (click)="$event.stopPropagation()"
+                  />
+                  <button
+                    class="ghost small danger"
+                    type="button"
+                    (click)="removeQuestion(i); $event.stopPropagation()"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="error" *ngIf="editError">{{ editError }}</p>
+            <div class="edit-actions">
+              <button class="ghost" type="button" (click)="cancelEdit(); $event.stopPropagation()">
+                Cancel
+              </button>
+              <button
+                class="primary"
+                type="button"
+                (click)="saveTemplate(template); $event.stopPropagation()"
+              >
+                Save changes
+              </button>
+            </div>
+          </div>
+        </ng-container>
+        <div class="template-meta">
+          <div class="template-actions">
+            <button
+            class="icon-button"
+            type="button"
+            (click)="startEdit(template); $event.stopPropagation()"
+            aria-label="Edit template"
+            title="Edit"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M4 16.8V20h3.2l9.4-9.4-3.2-3.2L4 16.8Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14.2 7.4 16.6 5a2 2 0 0 1 2.8 2.8l-2.4 2.4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+            <button
+            class="icon-button danger"
+            type="button"
+            (click)="$event.stopPropagation(); deleteTemplate(template.id)"
+            aria-label="Delete template"
+            title="Delete"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M5 7h14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+              <path
+                d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M7.5 7l1 11a2 2 0 0 0 2 1.8h3a2 2 0 0 0 2-1.8l1-11"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            </button>
+          </div>
+          <span class="meta">{{ template.createdAt | date:'mediumDate' }}</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <div class="modal-backdrop" *ngIf="showImportModal">
+    <div class="modal">
+      <header>
+        <h2>Import questions</h2>
+        <button class="icon" type="button" (click)="closeImportModal()">Close</button>
+      </header>
+      <div class="modal-body">
+        <p class="hint">Upload a single-sheet .xlsx with one column of questions.</p>
+        <button class="ghost file-button" type="button">
+          Choose file
+          <input type="file" accept=".xlsx" (change)="onFileSelected($event)" />
+        </button>
+        <p class="file-name" *ngIf="selectedFileName">{{ selectedFileName }}</p>
+        <div class="note">
+          <label>Template name (optional)</label>
+          <input
+            type="text"
+            name="templateName"
+            [(ngModel)]="templateName"
+            placeholder="Template name"
+          />
+        </div>
+        <div class="note">
+          <label>Import note (optional)</label>
+          <textarea
+            rows="2"
+            maxlength="100"
+            placeholder="Add up to 100 characters"
+            name="importNote"
+            [(ngModel)]="importNote"
+            (input)="updateNoteChars(importNote)"
+          ></textarea>
+          <div class="note-meta">
+            <span>Optional note saved with this import.</span>
+            <span [class.limit]="noteChars >= 100">{{ noteChars }}/100</span>
+          </div>
+        </div>
+        <p class="error" *ngIf="createError">{{ createError }}</p>
+      </div>
+      <footer>
+        <button class="ghost" type="button" (click)="closeImportModal()">Cancel</button>
+        <button class="primary" type="button" (click)="createTemplate()">
+          Create template
+        </button>
+      </footer>
+    </div>
+  </div>
+</section>

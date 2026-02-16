@@ -1,0 +1,132 @@
+<section class="settings">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Administration</p>
+      <h1>Settings</h1>
+      <p class="subtitle">Configure sites, regions, audit templates, and access defaults.</p>
+    </div>
+  </header>
+
+  <div class="settings-grid">
+    <article class="settings-card wide">
+      <h2>Response Type</h2>
+      <p>Configure default response options.</p>
+      <button class="primary" type="button" (click)="openResponseModal()">Add response</button>
+      <div class="response-list" *ngIf="responses.length">
+        <div class="response-item" *ngFor="let response of responses">
+          <strong>{{ response.name }}</strong>
+          <div class="tag-list">
+            <span class="tag" *ngFor="let tag of response.types" [class.negative]="isNegativeTag(response, tag)">
+              {{ tag }}
+            </span>
+          </div>
+          <button class="ghost small" type="button" (click)="removeResponse(response.name)">
+            Delete
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article class="settings-card">
+      <h2>Sites</h2>
+      <p>Define site names used across audit plans.</p>
+      <form class="inline-form" #siteForm="ngForm" (ngSubmit)="addSite(siteForm)">
+        <input
+          type="text"
+          name="site"
+          [(ngModel)]="newSite"
+          placeholder="Add site name"
+          required
+        />
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <div class="tag-list">
+        <span class="tag" *ngFor="let site of sites">
+          {{ site }}
+          <button type="button" class="remove" (click)="removeSite(site)">×</button>
+        </span>
+      </div>
+    </article>
+    <article class="settings-card">
+      <h2>Regions</h2>
+      <p>Maintain regional groupings for reporting.</p>
+      <form class="inline-form" #regionForm="ngForm" (ngSubmit)="addRegion(regionForm)">
+        <input
+          type="text"
+          name="region"
+          [(ngModel)]="newRegion"
+          placeholder="Add region name"
+          required
+        />
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <div class="tag-list">
+        <span class="tag" *ngFor="let region of regions">
+          {{ region }}
+          <button type="button" class="remove" (click)="removeRegion(region)">×</button>
+        </span>
+      </div>
+    </article>
+    <article class="settings-card">
+      <h2>Departments</h2>
+      <p>Create and manage departments used across the platform.</p>
+      <form class="inline-form" #departmentForm="ngForm" (ngSubmit)="addDepartment(departmentForm)">
+        <input
+          type="text"
+          name="department"
+          [(ngModel)]="newDepartment"
+          placeholder="Add department name"
+          required
+        />
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <div class="tag-list">
+        <span class="tag" *ngFor="let department of departments">
+          {{ department }}
+          <button type="button" class="remove" (click)="removeDepartment(department)">×</button>
+        </span>
+      </div>
+    </article>
+  </div>
+
+  <div class="modal-backdrop" *ngIf="showResponseModal">
+    <div class="modal">
+      <header>
+        <h2>Add response</h2>
+        <button class="icon" type="button" (click)="closeResponseModal()">Close</button>
+      </header>
+      <div class="modal-body">
+        <label class="field">
+          Response name
+          <input type="text" [(ngModel)]="responseName" placeholder="Response name" />
+        </label>
+        <label class="field">
+          Response type
+          <div class="tag-input">
+            <input
+              type="text"
+              [(ngModel)]="responseTypeInput"
+              placeholder="Type tag"
+              name="responseTypeInput"
+            />
+            <label class="checkbox">
+              <input type="checkbox" [(ngModel)]="responseTypeNegative" name="responseTypeNegative" />
+              Mark negative
+            </label>
+            <button class="ghost" type="button" (click)="addResponseType()">Add tag</button>
+          </div>
+          <div class="tag-list" *ngIf="responseTypes.length">
+            <span class="tag" *ngFor="let tag of responseTypes" [class.negative]="isNegativeTagDraft(tag)">
+              {{ tag }}
+              <button type="button" class="remove" (click)="removeResponseType(tag)">×</button>
+            </span>
+          </div>
+        </label>
+      </div>
+      <footer>
+        <button class="ghost" type="button" (click)="closeResponseModal()">Cancel</button>
+        <button class="primary" type="button" (click)="addResponse()">Add</button>
+      </footer>
+    </div>
+  </div>
+</section>

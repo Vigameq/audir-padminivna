@@ -1,0 +1,249 @@
+.user-management {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.page-header h1 {
+  font-family: var(--font-display);
+  margin: 0.35rem 0 0;
+}
+
+.subtitle {
+  margin: 0.5rem 0 0;
+  color: var(--color-muted);
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+button {
+  font: inherit;
+  border: 1px solid transparent;
+  padding: 0.6rem 1.3rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button.primary {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+button.ghost {
+  background: var(--color-surface)6eb;
+  border-color: rgba(255, 154, 0, 0.35);
+}
+
+button.small {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.panel {
+  background: var(--color-surface);
+  border-radius: 1.5rem;
+  border: 1px solid var(--color-line);
+  padding: 1.5rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(20, 10, 0, 0.15);
+  background: var(--color-surface);
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 1.2fr 1.2fr 1fr 1fr 1fr 0.8fr;
+  gap: 0.5rem;
+  padding: 0.7rem 0.5rem;
+  border-bottom: 1px solid rgba(20, 10, 0, 0.06);
+  font-size: 0.9rem;
+}
+
+.table-row.heading {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-muted);
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.icon-button {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 154, 0, 0.35);
+  background: var(--color-surface)6eb;
+  display: grid;
+  place-items: center;
+  color: var(--color-muted);
+}
+
+.icon-button svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.icon-button:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.2);
+}
+
+.icon-button.danger {
+  color: var(--color-accent);
+  border-color: rgba(180, 35, 24, 0.35);
+  background: var(--color-surface)1f1;
+}
+
+.status {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.status.active {
+  color: var(--color-accent);
+}
+
+.status.pending {
+  color: var(--color-muted);
+}
+
+.status.suspended {
+  color: var(--color-accent);
+}
+
+.status::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 6, 2, 0.5);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 20;
+}
+
+.modal {
+  width: min(720px, 100%);
+  background: var(--color-surface);
+  border-radius: 1.5rem;
+  border: 1px solid var(--color-line);
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.2rem;
+  box-shadow: 0 30px 60px rgba(20, 10, 0, 0.2);
+}
+
+.modal header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+.modal .icon {
+  border: none;
+  background: transparent;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--color-muted);
+}
+
+.modal-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.modal .field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .table-row {
+    grid-template-columns: 1fr;
+  }
+}

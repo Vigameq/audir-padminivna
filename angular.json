@@ -1,0 +1,104 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "packageManager": "npm",
+    "analytics": "a25061fc-83af-4958-9fba-93f4665f7d0b"
+  },
+  "newProjectRoot": "projects",
+  "projects": {
+    "tx-digitaltwining": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "style": "scss"
+        }
+      },
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": [
+              "src/styles.scss"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "allowedCommonJsDependencies": [
+                "qrcode",
+                "jspdf",
+                "html2canvas",
+                "canvg",
+                "raf",
+                "rgbcolor",
+                "core-js/modules/es.promise.js",
+                "core-js/modules/es.string.match.js",
+                "core-js/modules/es.string.replace.js",
+                "core-js/modules/es.string.starts-with.js",
+                "core-js/modules/es.array.iterator.js",
+                "core-js/modules/web.dom-collections.iterator.js",
+                "core-js/modules/es.array.reduce.js",
+                "core-js/modules/es.string.ends-with.js",
+                "core-js/modules/es.string.split.js",
+                "core-js/modules/es.string.trim.js",
+                "core-js/modules/es.array.index-of.js",
+                "core-js/modules/es.string.includes.js",
+                "core-js/modules/es.array.reverse.js",
+                "core-js/modules/es.regexp.to-string.js"
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "7kB",
+                  "maximumError": "10kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "tx-digitaltwining:build:production"
+            },
+            "development": {
+              "buildTarget": "tx-digitaltwining:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test"
+        }
+      }
+    }
+  }
+}

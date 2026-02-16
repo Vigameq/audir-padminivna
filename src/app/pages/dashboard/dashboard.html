@@ -1,0 +1,177 @@
+<section class="dashboard">
+  <header>
+    <p class="eyebrow">Overview</p>
+    <h1>{{ dashboardTitle }}</h1>
+    <p class="subtitle">Snapshot of audit readiness and active plans.</p>
+  </header>
+
+  <section class="metrics">
+    <article>
+      <span>Total audits</span>
+      <strong>{{ audits.length }}</strong>
+      <em>{{ completedAudits.length }} completed</em>
+    </article>
+    <article>
+      <span>In progress</span>
+      <strong>{{ inProgressAudits.length }}</strong>
+      <em>{{ createdAudits.length }} created</em>
+    </article>
+    <article *ngIf="!isCustomer">
+      <span>Open NCs</span>
+      <strong>{{ openNcCount }}</strong>
+      <em>{{ pendingReviewAll }} pending review</em>
+    </article>
+    <article *ngIf="!isCustomer">
+      <span>Closed NCs</span>
+      <strong>{{ closedNcCount }}</strong>
+      <em>{{ ncRecords.length }} total</em>
+    </article>
+    <article>
+      <span>Templates</span>
+      <strong>{{ templatesCount }}</strong>
+      <em>{{ auditors.length }} auditors</em>
+    </article>
+    <article>
+      <span>Managers</span>
+      <strong>{{ managers.length }}</strong>
+      <em>{{ users.length }} users</em>
+    </article>
+  </section>
+
+  <section class="panel split">
+    <div class="chart">
+      <div class="panel-header">
+        <h2>Audit pipeline</h2>
+        <span class="legend"><span class="dot"></span>Counts</span>
+      </div>
+      <div class="chart-row">
+        <span>Created</span>
+        <div class="bar">
+          <span
+            class="fill planned"
+            [style.width.%]="chartPercent(createdAudits.length, auditPipelineMax)"
+          ></span>
+        </div>
+        <strong>{{ createdAudits.length }}</strong>
+      </div>
+      <div class="chart-row">
+        <span>In progress</span>
+        <div class="bar">
+          <span
+            class="fill completed"
+            [style.width.%]="chartPercent(inProgressAudits.length, auditPipelineMax)"
+          ></span>
+        </div>
+        <strong>{{ inProgressAudits.length }}</strong>
+      </div>
+      <div class="chart-row">
+        <span>Completed</span>
+        <div class="bar">
+          <span
+            class="fill templates"
+            [style.width.%]="chartPercent(completedAudits.length, auditPipelineMax)"
+          ></span>
+        </div>
+        <strong>{{ completedAudits.length }}</strong>
+      </div>
+    </div>
+    <div class="chart" *ngIf="!isCustomer">
+      <div class="panel-header">
+        <h2>NC status breakdown</h2>
+        <span class="legend"><span class="dot"></span>Current</span>
+      </div>
+      <div class="chart-row">
+        <span>Assigned</span>
+        <div class="bar">
+          <span
+            class="fill planned"
+            [style.width.%]="chartPercent(ncStatusCounts['Assigned'], ncRecords.length || 1)"
+          ></span>
+        </div>
+        <strong>{{ ncStatusCounts['Assigned'] }}</strong>
+      </div>
+      <div class="chart-row">
+        <span>In progress</span>
+        <div class="bar">
+          <span
+            class="fill completed"
+            [style.width.%]="chartPercent(ncStatusCounts['In Progress'], ncRecords.length || 1)"
+          ></span>
+        </div>
+        <strong>{{ ncStatusCounts['In Progress'] }}</strong>
+      </div>
+      <div class="chart-row">
+        <span>Rework</span>
+        <div class="bar">
+          <span
+            class="fill templates"
+            [style.width.%]="chartPercent(ncStatusCounts['Rework'], ncRecords.length || 1)"
+          ></span>
+        </div>
+        <strong>{{ ncStatusCounts['Rework'] }}</strong>
+      </div>
+      <div class="chart-row">
+        <span>Resolution submitted</span>
+        <div class="bar">
+          <span
+            class="fill planned"
+            [style.width.%]="chartPercent(ncStatusCounts['Resolution Submitted'], ncRecords.length || 1)"
+          ></span>
+        </div>
+        <strong>{{ ncStatusCounts['Resolution Submitted'] }}</strong>
+      </div>
+      <div class="chart-row">
+        <span>Closed</span>
+        <div class="bar">
+          <span
+            class="fill completed"
+            [style.width.%]="chartPercent(ncStatusCounts['Closed'], ncRecords.length || 1)"
+          ></span>
+        </div>
+        <strong>{{ ncStatusCounts['Closed'] }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="isAuditor">
+    <div class="panel-header">
+      <h2>My workload</h2>
+      <span class="count">{{ assignedAudits.length }} audits</span>
+    </div>
+    <div class="metrics compact">
+      <article>
+        <span>Assigned audits</span>
+        <strong>{{ assignedAudits.length }}</strong>
+      </article>
+      <article>
+        <span>Open findings</span>
+        <strong>{{ assignedOpenFindings }}</strong>
+      </article>
+      <article>
+        <span>Pending review</span>
+        <strong>{{ pendingReviewCount }}</strong>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Recent audits</h2>
+      <span class="count">{{ audits.length }} total</span>
+    </div>
+    <div class="audit-list" *ngIf="audits.length; else noAudits">
+      <div class="audit-row" *ngFor="let audit of audits | slice:0:6">
+        <div>
+          <strong>{{ audit.auditType }}</strong>
+          <p>{{ audit.auditSubtype || '—' }} · {{ audit.code }}</p>
+        </div>
+        <div>
+          <span class="status">{{ formatDate(audit.startDate) }}</span>
+        </div>
+      </div>
+    </div>
+    <ng-template #noAudits>
+      <div class="empty">No audits available yet.</div>
+    </ng-template>
+  </section>
+</section>

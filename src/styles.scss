@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;600&family=Space+Grotesk:wght@500;600&display=swap');
+
+:root {
+  --color-accent: #ff9a00;
+  --color-accent-soft: #ffd59a;
+  --color-surface: #ffffff;
+  --color-surface-strong: #fffaf4;
+  --color-ink: #1f1a14;
+  --color-ink-strong: #120c04;
+  --color-muted: #5e564e;
+  --color-line: rgba(20, 10, 0, 0.08);
+  --font-display: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+  --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  background: radial-gradient(circle at top right, rgba(255, 154, 0, 0.12), transparent 45%),
+    linear-gradient(120deg, #ffffff 0%, #ffffff 80%, #fff4e0 100%);
+  color: var(--color-ink);
+}
+
+button {
+  font-family: inherit;
+}

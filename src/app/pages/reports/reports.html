@@ -1,0 +1,72 @@
+<section class="page">
+  <div class="page-header">
+    <h1>Reports</h1>
+    <p>Generate summaries, export results, and share dashboards.</p>
+  </div>
+
+  <div class="panel" *ngIf="loading">
+    <p>Loading reports…</p>
+  </div>
+
+  <div class="panel" *ngIf="error">
+    <p class="error">{{ error }}</p>
+  </div>
+
+  <section class="panel report-panel" *ngIf="!loading && !error">
+    <div class="panel-header">
+      <div>
+        <h2>Closed audits</h2>
+        <p class="panel-subtitle">Download finalized reports and summaries.</p>
+      </div>
+      <span class="count">{{ reportAudits.length }} reports</span>
+    </div>
+    <div class="report-grid" *ngIf="reportAudits.length; else emptyReports">
+      <article class="report-card" *ngFor="let audit of reportAudits">
+        <header class="card-header">
+          <div class="avatar">
+            <span>{{ audit.auditType.charAt(0) || '?' }}</span>
+          </div>
+          <div>
+            <p class="code">{{ audit.code }}</p>
+            <h3>{{ audit.auditType }}</h3>
+            <p class="meta">{{ audit.auditSubtype || '—' }}</p>
+          </div>
+          <span class="status-pill">Closed</span>
+        </header>
+
+        <div class="card-body">
+          <div class="detail">
+            <span>Auditor</span>
+            <strong>{{ audit.auditorName || '—' }}</strong>
+          </div>
+          <div class="detail">
+            <span>Department</span>
+            <strong>{{ audit.department || '—' }}</strong>
+          </div>
+          <div class="detail">
+            <span>Location</span>
+            <strong>{{ audit.locationCity || '—' }}</strong>
+          </div>
+          <div class="detail">
+            <span>Dates</span>
+            <strong>{{ formatDate(audit.startDate) }} → {{ formatDate(audit.endDate) }}</strong>
+          </div>
+        </div>
+
+        <footer class="card-actions">
+          <button
+            class="primary"
+            type="button"
+            (click)="downloadReport(audit)"
+            [disabled]="generating[audit.code]"
+          >
+            {{ generating[audit.code] ? 'Generating…' : 'Download PDF' }}
+          </button>
+        </footer>
+      </article>
+    </div>
+    <ng-template #emptyReports>
+      <p class="muted">No closed audits available for reporting yet.</p>
+    </ng-template>
+  </section>
+</section>

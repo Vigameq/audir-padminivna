@@ -1,0 +1,246 @@
+<section class="audit-perform">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Audit execution</p>
+      <h1>Audit perform</h1>
+      <p class="subtitle">Review and execute all created audit plans.</p>
+    </div>
+    <div class="header-actions">
+      <label class="filter">
+        From
+        <input type="date" [(ngModel)]="filterStart" name="filterStart" />
+      </label>
+      <label class="filter">
+        To
+        <input type="date" [(ngModel)]="filterEnd" name="filterEnd" />
+      </label>
+      <label class="filter">
+        Sort
+        <select [(ngModel)]="sortOrder" name="sortOrder">
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <section class="panel wide">
+    <div class="panel-header">
+      <h2>Created audits</h2>
+      <span class="count">{{ totalCount }} total</span>
+    </div>
+    <div class="audit-grid" *ngIf="audits.length">
+      <article class="audit-card compact" *ngFor="let audit of audits">
+        <div class="audit-row">
+          <div class="audit-main">
+            <div class="audit-title">
+              <span class="code">{{ audit.code }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.auditType }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.auditSubtype || '—' }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.department || '—' }}</span>
+            </div>
+            <div class="audit-sub">
+              <span>{{ formatDate(audit.startDate) }} → {{ formatDate(audit.endDate) }}</span>
+              <span class="divider">·</span>
+              <span>Auditor: {{ audit.auditorName || '—' }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.country || '—' }} · {{ audit.locationCity || '—' }}</span>
+              <span class="divider">·</span>
+              <span>{{ audit.site || '—' }} · {{ audit.region || '—' }}</span>
+            </div>
+          </div>
+          <div class="audit-inline">
+            <button
+              class="ghost small"
+              type="button"
+              (click)="downloadQr(audit)"
+              [disabled]="isQrGenerating[audit.id]"
+            >
+              {{ isQrGenerating[audit.id] ? 'Generating…' : 'Download QR' }}
+            </button>
+            <button
+              class="primary small"
+              type="button"
+              (click)="openPerform(audit)"
+              [disabled]="!canPerformAudit(audit)"
+            >
+              Perform
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div class="empty" *ngIf="!audits.length">
+      No audits created yet. Create one in Audit Plan.
+    </div>
+    <div class="pagination" *ngIf="totalCount > pageSize">
+      <button class="ghost small" type="button" (click)="prevPage()" [disabled]="pageIndex === 1">
+        Prev
+      </button>
+      <span>Page {{ pageIndex }} of {{ totalPages }}</span>
+      <button class="ghost small" type="button" (click)="nextPage()" [disabled]="pageIndex === totalPages">
+        Next
+      </button>
+    </div>
+  </section>
+
+  <div class="drawer-backdrop" *ngIf="activeAudit">
+    <aside class="drawer">
+      <header class="drawer-header">
+        <div>
+          <h2>Audit perform</h2>
+          <p class="subtitle">
+            {{ activeAudit.auditType }} · {{ activeAudit.auditSubtype || '—' }} ·
+            {{ activeAudit.code }} ·
+            {{ activeAudit.responseType || 'Response type not set' }}
+          </p>
+          <div class="asset-controls">
+            <label>
+              Products
+              <div class="chip-row scroll">
+                <button
+                  class="chip"
+                  type="button"
+                  *ngFor="let asset of assetNumberOptions"
+                  [class.selected]="activeAsset === asset"
+                  [class.complete]="isAssetComplete(asset)"
+                  (click)="onAssetChipClick(asset)"
+                >
+                  {{ asset }}
+                </button>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="drawer-meta">
+          <div class="progress">
+            <span>{{ answeredCount }}/{{ totalQuestions }} answered · Asset {{ activeAsset || '1' }}</span>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                [style.width.%]="totalQuestions ? (answeredCount / totalQuestions) * 100 : 0"
+              ></div>
+            </div>
+          </div>
+          <button class="ghost small close-button" type="button" (click)="closePerform()">
+            Close
+          </button>
+        </div>
+      </header>
+
+      <section class="drawer-content">
+        <h3>Template questions</h3>
+        <div class="empty" *ngIf="!activeTemplate">
+          No template found for this audit type.
+        </div>
+        <ol class="question-list" *ngIf="activeTemplate">
+          <li class="question-card" *ngFor="let question of activeTemplate.questions; let i = index">
+            <div class="question-header">
+              <div>
+                <span class="question-index">Q{{ i + 1 }}</span>
+                <p class="question-text">{{ question }}</p>
+              </div>
+            </div>
+            <div class="question-body">
+              <div class="inline-fields">
+                <div class="field">
+                  <label>Select response</label>
+                  <select
+                    [(ngModel)]="responseSelections[i]"
+                    name="response-{{ i }}"
+                    (ngModelChange)="onResponseChange(i)"
+                  >
+                    <option value="">Select response</option>
+                    <option *ngFor="let option of responseOptions" [value]="option">
+                      {{ option }}
+                    </option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Assign NC</label>
+                  <select
+                    [(ngModel)]="ncAssignments[i]"
+                    name="nc-{{ i }}"
+                    [disabled]="!isNegativeSelection(i)"
+                    (ngModelChange)="onNcChange(i)"
+                  >
+                    <option value="">Select department</option>
+                    <option *ngFor="let department of departments" [value]="department">
+                      {{ department }}
+                    </option>
+                  </select>
+                  <span class="field-error" *ngIf="ncErrors[i]">Assign NC is required.</span>
+                </div>
+              </div>
+              <div class="evidence-row">
+                <span>Attach evidence</span>
+                <div class="evidence-actions">
+                  <label class="ghost small file-trigger">
+                    Upload files
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.mp4,.webm,.mov,image/jpeg,image/png,video/mp4,video/webm,video/quicktime"
+                      multiple
+                      (change)="onEvidenceSelected(i, $event)"
+                    />
+                  </label>
+                </div>
+                <span class="evidence-name" *ngIf="evidenceFiles[i]">
+                  {{ evidenceFiles[i] }}
+                </span>
+                <span class="evidence-name" *ngIf="evidenceItems[i]?.length">
+                  {{ evidenceItems[i].length }} files attached
+                </span>
+                <div class="evidence-preview" *ngIf="evidenceItems[i]?.length">
+                  <ng-container *ngFor="let item of evidenceItems[i]">
+                    <img
+                      *ngIf="item.type?.startsWith('image/')"
+                      [src]="item.dataUrl"
+                      [alt]="item.name"
+                      loading="lazy"
+                    />
+                    <video
+                      *ngIf="item.type?.startsWith('video/')"
+                      [src]="item.dataUrl"
+                      controls
+                    ></video>
+                  </ng-container>
+                </div>
+              </div>
+              <div class="note-row">
+                <label>Auditor note</label>
+                <textarea
+                  rows="3"
+                  maxlength="1000"
+                  placeholder="Add up to 1000 words"
+                  [(ngModel)]="noteEntries[i]"
+                  name="note-{{ i }}"
+                  (input)="noteWords[i] = countWords(noteEntries[i])"
+                ></textarea>
+                <span class="note-count">{{ noteWords[i] }}/1000 words</span>
+              </div>
+            </div>
+            <div class="question-actions">
+              <button class="ghost small" type="button" (click)="saveQuestion(i)">
+                {{ savedQuestions[i] ? 'Saved' : 'Save' }}
+              </button>
+            </div>
+          </li>
+        </ol>
+        <div class="submit-all">
+          <button
+            class="primary"
+            type="button"
+            (click)="submitAllQuestions()"
+            [disabled]="!areAllAssetsComplete()"
+          >
+            Submit asset
+          </button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</section>

@@ -1,0 +1,67 @@
+<section class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Customer workspace</p>
+      <h1>Customer dashboard</h1>
+      <p>Track your audit progress, evidence, NCs, and reports.</p>
+    </div>
+    <div class="header-actions">
+      <a class="ghost" routerLink="/reports">View reports</a>
+    </div>
+  </header>
+
+  <section class="summary">
+    <article class="summary-card">
+      <span>Total audits</span>
+      <strong>{{ totalAudits }}</strong>
+    </article>
+    <article class="summary-card">
+      <span>In progress</span>
+      <strong>{{ inProgressAudits.length }}</strong>
+    </article>
+    <article class="summary-card">
+      <span>Completed</span>
+      <strong>{{ completedAudits.length }}</strong>
+    </article>
+    <!-- Open NCs removed for customer dashboard -->
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h2>Your audits</h2>
+        <p>Progress and evidence access by audit.</p>
+      </div>
+      <span class="count">{{ audits.length }} audits</span>
+    </div>
+    <div class="audit-grid" *ngIf="audits.length; else noAudits">
+      <article class="audit-card" *ngFor="let audit of audits">
+        <div class="audit-meta">
+          <span>{{ audit.auditType }}</span>
+          <span>·</span>
+          <span>{{ audit.auditSubtype || '—' }}</span>
+        </div>
+        <h3>{{ audit.code }}</h3>
+        <p class="audit-range">{{ formatDate(audit.startDate) }} → {{ formatDate(audit.endDate) }}</p>
+        <div class="progress">
+          <div class="progress-label">
+            <span>{{ progressLabel(audit) }}</span>
+            <span>{{ progressPercent(audit) }}%</span>
+          </div>
+          <div class="progress-bar">
+            <span [style.width.%]="progressPercent(audit)"></span>
+          </div>
+        </div>
+        <div class="audit-actions">
+          <a class="secondary" [routerLink]="['/evidence', audit.code]">Evidence</a>
+          <a class="ghost" routerLink="/reports">Report</a>
+        </div>
+      </article>
+    </div>
+    <ng-template #noAudits>
+      <div class="empty">No audits assigned yet.</div>
+    </ng-template>
+  </section>
+
+  <!-- NC overview removed for customer dashboard -->
+</section>
