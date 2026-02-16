@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="210" viewBox="0 0 960 210" role="img" aria-labelledby="title desc">
+  <title id="title">Padmini Mechatronics</title>
+  <desc id="desc">Padmini Mechatronics brand mark and wordmark in green and black.</desc>
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d3a2"/>
+      <stop offset="100%" stop-color="#008f6f"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0,12)">
+    <path d="M20 18h112l-26 29H74l-30 34H0z" fill="url(#g)"/>
+    <path d="M84 47h48l-42 49H42z" fill="#00b388"/>
+    <path d="M165 30h147l-23 25h-87v18h78l-23 24h-55v43h-37z" fill="#101514"/>
+    <path d="M329 30h56l34 60 35-60h55v110h-36V77l-37 63h-34l-37-63v63h-36z" fill="#101514"/>
+    <path d="M525 30h36v110h-36z" fill="#101514"/>
+    <path d="M578 30h37l73 62V30h36v110h-32l-78-66v66h-36z" fill="#101514"/>
+    <path d="M742 30h36v110h-36z" fill="#101514"/>
+    <path d="M798 30h144l-24 25h-83v18h76l-23 24h-53v18h107v25H798z" fill="#101514"/>
+    <text x="170" y="175" font-family="Orbitron, Arial, sans-serif" font-size="36" letter-spacing="16" fill="#101514">MECHATRONICS</text>
+  </g>
+</svg>
