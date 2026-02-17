@@ -12,10 +12,11 @@
       "AllowedMethods": ["GET", "PUT", "HEAD", "POST"],
       "AllowedOrigins": [
         "https://auditx-tierx.web.app",
+        "https://padminivna-auditx.web.app",
+        "https://padminivna-auditx.firebaseapp.com",
         "http://localhost:4200"
       ],
       "MaxAgeSeconds": 3000
     }
   ]
 }
-
