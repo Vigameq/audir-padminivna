@@ -68,6 +68,7 @@ export class AuditPerform implements OnInit {
   protected evidenceFiles: string[] = [];
   protected evidenceDataUrls: string[] = [];
   protected evidenceItems: { name: string; type: string; key?: string; dataUrl?: string }[][] = [];
+  protected deletingEvidence: Record<string, boolean> = {};
   protected noteEntries: string[] = [];
   protected get assetNumberOptions(): string[] {
     return this.assetScope.length ? this.assetScope : ['1'];
@@ -907,6 +908,51 @@ export class AuditPerform implements OnInit {
       this.persistEvidenceItems(index, this.evidenceItems[index]);
     });
     input.value = '';
+  }
+
+  protected async onEvidenceDelete(index: number, itemIndex: number): Promise<void> {
+    const items = this.evidenceItems[index] ?? [];
+    const target = items[itemIndex];
+    if (!target) {
+      return;
+    }
+
+    const deleteToken = `${index}-${itemIndex}`;
+    if (this.deletingEvidence[deleteToken]) {
+      return;
+    }
+    this.deletingEvidence[deleteToken] = true;
+
+    try {
+      const key = target.key ?? this.extractEvidenceKey(target.dataUrl ?? '');
+      if (this.activeAudit && key) {
+        await firstValueFrom(
+          this.auditAnswerService.deleteEvidence({
+            audit_code: this.activeAudit.code,
+            key,
+          })
+        );
+      }
+
+      const nextItems = items.filter((_, currentIndex) => currentIndex !== itemIndex);
+      this.evidenceItems[index] = nextItems;
+
+      const firstItem = nextItems[0];
+      this.evidenceFiles[index] = firstItem?.name ?? '';
+      this.evidenceDataUrls[index] = firstItem?.dataUrl ?? '';
+      this.persistEvidenceItems(index, nextItems);
+
+      const currentResponse = (this.responseSelections[index] ?? '').trim();
+      if (this.activeAsset && currentResponse) {
+        const currentStatus = this.statusByAsset[this.activeAsset]?.[index];
+        await this.persistAnswer(index, currentStatus === 'Submitted' ? 'Submitted' : 'Saved');
+      }
+    } catch (error) {
+      console.error('Evidence delete failed', error);
+      window.alert('Unable to delete evidence. Please try again.');
+    } finally {
+      delete this.deletingEvidence[deleteToken];
+    }
   }
 
   protected countWords(value: string): number {

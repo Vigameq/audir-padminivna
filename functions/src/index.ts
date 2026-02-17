@@ -14,7 +14,13 @@ import jwt from 'jsonwebtoken';
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
-import { S3Client, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 type AuthPayload = {
@@ -827,6 +833,38 @@ router.post('/evidence/sign', requireAuth, async (req: AuthedRequest, res) => {
     })
   );
   return res.json({ urls });
+});
+
+router.post('/evidence/delete', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  if (!spacesClient || !spacesBucket) {
+    return res.status(500).json({ detail: 'Spaces configuration missing' });
+  }
+  const payload = req.body ?? {};
+  const auditCode = String(payload.audit_code ?? '').trim();
+  const key = String(payload.key ?? '').replace(/^\/+/, '');
+  if (!auditCode || !key) {
+    return res.status(400).json({ detail: 'Missing delete details' });
+  }
+  if (!key.startsWith(`${auditCode}/`)) {
+    return res.status(400).json({ detail: 'Invalid evidence key' });
+  }
+  const planCheck = await pool.query(
+    'SELECT id FROM audit_plans WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+    [req.user?.tenant_id, auditCode]
+  );
+  if (!planCheck.rows.length) {
+    return res.status(404).json({ detail: 'Audit not found' });
+  }
+  await spacesClient.send(
+    new DeleteObjectCommand({
+      Bucket: spacesBucket,
+      Key: key,
+    })
+  );
+  return res.json({ ok: true });
 });
 
 router.post('/audit-answers', requireAuth, async (req: AuthedRequest, res) => {

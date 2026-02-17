@@ -20,12 +20,14 @@
               {{ tag }}
             </span>
           </div>
-          <button class="ghost small edit" type="button" (click)="startEditResponse(response)">
-            Edit
-          </button>
-          <button class="ghost small delete" type="button" (click)="removeResponse(response)">
-            Delete
-          </button>
+          <div class="response-actions">
+            <button class="ghost small edit" type="button" (click)="startEditResponse(response)">
+              Edit
+            </button>
+            <button class="ghost small delete" type="button" (click)="removeResponse(response)">
+              Delete
+            </button>
+          </div>
         </div>
       </div>
     </article>

@@ -68,6 +68,10 @@ export class AuditAnswerService {
     return this.http.post<{ urls: string[] }>(`${this.baseUrl}/evidence/sign`, payload);
   }
 
+  deleteEvidence(payload: { audit_code: string; key: string }): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/evidence/delete`, payload);
+  }
+
   private mapFromApi(payload: any): AuditAnswerRecord {
     return {
       id: String(payload?.id ?? ''),

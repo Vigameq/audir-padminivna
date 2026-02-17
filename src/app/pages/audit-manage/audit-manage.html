@@ -38,7 +38,7 @@
       </div>
     </div>
     <div class="audit-grid" *ngIf="activeAudits.length; else emptyAudits">
-      <article class="audit-card compact" *ngFor="let audit of pagedAudits">
+      <article class="audit-card compact" *ngFor="let audit of activeAudits">
         <div class="audit-row">
           <div class="audit-main">
             <div class="audit-title">

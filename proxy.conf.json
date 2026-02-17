@@ -1,6 +1,6 @@
 {
   "/api": {
-    "target": "https://asia-south1-auditx-tierx.cloudfunctions.net",
+    "target": "https://asia-south1-padminivna-auditx.cloudfunctions.net",
     "secure": true,
     "changeOrigin": true
   }

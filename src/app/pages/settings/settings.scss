@@ -126,20 +126,18 @@
   border: 1px solid rgba(20, 10, 0, 0.08);
   background: var(--color-surface)af4;
   font-size: 0.85rem;
-  position: relative;
 }
 
-.response-item .ghost.small {
-  position: absolute;
-  top: 0.5rem;
+.response-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.response-item .ghost.small.delete {
-  right: 0.5rem;
-}
-
-.response-item .ghost.small.edit {
-  right: 4.9rem;
+.response-actions .ghost.small {
+  position: static;
 }
 
 .response-item strong {

@@ -502,6 +502,11 @@ button:disabled,
   width: 100%;
 }
 
+.evidence-item {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .evidence-preview img,
 .evidence-preview video {
   width: 100%;
@@ -510,6 +515,35 @@ button:disabled,
   border-radius: 0.6rem;
   border: 1px solid rgba(20, 10, 0, 0.1);
   background: var(--color-surface);
+}
+
+.evidence-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+}
+
+.evidence-item-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-delete {
+  border: 1px solid rgba(244, 180, 96, 0.8);
+  background: transparent;
+  color: var(--color-text);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 0.18rem 0.55rem;
+  cursor: pointer;
+}
+
+.evidence-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .nc-row {

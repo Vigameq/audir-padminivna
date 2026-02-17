@@ -195,19 +195,30 @@
                   {{ evidenceItems[i].length }} files attached
                 </span>
                 <div class="evidence-preview" *ngIf="evidenceItems[i]?.length">
-                  <ng-container *ngFor="let item of evidenceItems[i]">
+                  <article class="evidence-item" *ngFor="let item of evidenceItems[i]; let itemIndex = index">
                     <img
-                      *ngIf="item.type?.startsWith('image/')"
+                      *ngIf="item.type.startsWith('image/')"
                       [src]="item.dataUrl"
                       [alt]="item.name"
                       loading="lazy"
                     />
                     <video
-                      *ngIf="item.type?.startsWith('video/')"
+                      *ngIf="item.type.startsWith('video/')"
                       [src]="item.dataUrl"
                       controls
                     ></video>
-                  </ng-container>
+                    <div class="evidence-item-meta">
+                      <span>{{ item.name }}</span>
+                      <button
+                        type="button"
+                        class="evidence-delete"
+                        (click)="onEvidenceDelete(i, itemIndex)"
+                        [disabled]="deletingEvidence[i + '-' + itemIndex]"
+                      >
+                        {{ deletingEvidence[i + '-' + itemIndex] ? 'Deleting...' : 'Delete' }}
+                      </button>
+                    </div>
+                  </article>
                 </div>
               </div>
               <div class="note-row">
@@ -224,7 +235,12 @@
               </div>
             </div>
             <div class="question-actions">
-              <button class="ghost small" type="button" (click)="saveQuestion(i)">
+              <button
+                class="ghost small"
+                type="button"
+                (click)="saveQuestion(i)"
+                [disabled]="!(responseSelections[i] || '').trim()"
+              >
                 {{ savedQuestions[i] ? 'Saved' : 'Save' }}
               </button>
             </div>
