@@ -123,6 +123,26 @@ const ensureFolderMarkers = async (auditCode: string, assetNumber: number) => {
 const sanitizeFilename = (name: string) =>
   name.replace(/[^a-zA-Z0-9._-]+/g, '_');
 
+const normalizeEvidenceKey = (raw: string): string => {
+  const value = String(raw ?? '').trim();
+  if (!value) {
+    return '';
+  }
+  let key = value;
+  if (key.startsWith('http://') || key.startsWith('https://')) {
+    try {
+      key = new URL(key).pathname;
+    } catch {
+      return '';
+    }
+  }
+  key = key.split('?')[0].replace(/^\/+/, '');
+  if (spacesBucket && key.startsWith(`${spacesBucket}/`)) {
+    key = key.slice(spacesBucket.length + 1);
+  }
+  return decodeURIComponent(key);
+};
+
 const jwtSecret = env.jwtSecret;
 const jwtExpiryMinutes = Number(env.accessTokenExpireMinutes);
 const smtpPort = Number(env.smtpPort);
@@ -844,7 +864,7 @@ router.post('/evidence/delete', requireAuth, async (req: AuthedRequest, res) => 
   }
   const payload = req.body ?? {};
   const auditCode = String(payload.audit_code ?? '').trim();
-  const key = String(payload.key ?? '').replace(/^\/+/, '');
+  const key = normalizeEvidenceKey(payload.key ?? '');
   if (!auditCode || !key) {
     return res.status(400).json({ detail: 'Missing delete details' });
   }
