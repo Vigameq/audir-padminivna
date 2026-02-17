@@ -3,6 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, forkJoin, map, of, switchMap, tap } from 'rxjs';
 
 export type ResponseDefinition = {
+  id?: number;
   name: string;
   types: string[];
   negativeTypes: string[];
@@ -52,6 +53,22 @@ export class ResponseService {
         types: response.types,
         negative_types: response.negativeTypes,
       })
+      .pipe(switchMap(() => this.syncFromApi()));
+  }
+
+  updateResponse(responseId: number, response: ResponseDefinition): Observable<ResponseDefinition[]> {
+    return this.http
+      .put(`${this.baseUrl}/response-types/${responseId}`, {
+        name: response.name,
+        types: response.types,
+        negative_types: response.negativeTypes,
+      })
+      .pipe(switchMap(() => this.syncFromApi()));
+  }
+
+  deleteResponseById(responseId: number): Observable<ResponseDefinition[]> {
+    return this.http
+      .delete(`${this.baseUrl}/response-types/${responseId}`)
       .pipe(switchMap(() => this.syncFromApi()));
   }
 
@@ -142,6 +159,7 @@ export class ResponseService {
       ? payload.negative_types
       : [];
     return {
+      id: Number(payload?.id ?? 0) || undefined,
       name: String(payload?.name ?? ''),
       types,
       negativeTypes,

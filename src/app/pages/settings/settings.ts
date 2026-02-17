@@ -30,6 +30,7 @@ export class Settings implements OnInit {
   protected responseTypes: string[] = [];
   protected responseNegativeTypes: string[] = [];
   protected responseTypeNegative = false;
+  protected editingResponseId: number | null = null;
   protected get responses(): ResponseDefinition[] {
     return this.responseService.responses();
   }
@@ -99,11 +100,23 @@ export class Settings implements OnInit {
   }
 
   protected openResponseModal(): void {
+    this.editingResponseId = null;
+    this.showResponseModal = true;
+  }
+
+  protected startEditResponse(response: ResponseDefinition): void {
+    this.editingResponseId = response.id ?? null;
+    this.responseName = response.name;
+    this.responseTypeInput = '';
+    this.responseTypes = [...response.types];
+    this.responseNegativeTypes = [...response.negativeTypes];
+    this.responseTypeNegative = false;
     this.showResponseModal = true;
   }
 
   protected closeResponseModal(): void {
     this.showResponseModal = false;
+    this.editingResponseId = null;
     this.responseName = '';
     this.responseTypeInput = '';
     this.responseTypes = [];
@@ -111,20 +124,22 @@ export class Settings implements OnInit {
     this.responseTypeNegative = false;
   }
 
-  protected addResponse(): void {
+  protected saveResponse(): void {
     const name = this.responseName.trim();
     if (!name || !this.responseTypes.length) {
       return;
     }
-    this.responseService
-      .createResponse({
-        name,
-        types: [...this.responseTypes],
-        negativeTypes: [...this.responseNegativeTypes],
-      })
-      .subscribe({
-        next: () => this.closeResponseModal(),
-      });
+    const payload: ResponseDefinition = {
+      name,
+      types: [...this.responseTypes],
+      negativeTypes: [...this.responseNegativeTypes],
+    };
+    const request$ = this.editingResponseId
+      ? this.responseService.updateResponse(this.editingResponseId, payload)
+      : this.responseService.createResponse(payload);
+    request$.subscribe({
+      next: () => this.closeResponseModal(),
+    });
   }
 
   protected addResponseType(): void {
@@ -149,8 +164,12 @@ export class Settings implements OnInit {
     this.responseNegativeTypes = this.responseNegativeTypes.filter((item) => item !== value);
   }
 
-  public removeResponse(name: string): void {
-    this.responseService.deleteResponseByName(name).subscribe();
+  public removeResponse(response: ResponseDefinition): void {
+    if (response.id) {
+      this.responseService.deleteResponseById(response.id).subscribe();
+      return;
+    }
+    this.responseService.deleteResponseByName(response.name).subscribe();
   }
 
   protected isNegativeTag(response: ResponseDefinition, tag: string): boolean {

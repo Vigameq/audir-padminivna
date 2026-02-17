@@ -132,7 +132,14 @@
 .response-item .ghost.small {
   position: absolute;
   top: 0.5rem;
+}
+
+.response-item .ghost.small.delete {
   right: 0.5rem;
+}
+
+.response-item .ghost.small.edit {
+  right: 4.9rem;
 }
 
 .response-item strong {

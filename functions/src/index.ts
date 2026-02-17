@@ -412,6 +412,31 @@ router.post('/response-types', requireAuth, async (req: AuthedRequest, res) => {
   return res.status(201).json(rows[0]);
 });
 
+router.put('/response-types/:id', requireAuth, async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid response type id' });
+  }
+  const { name, types, negative_types } = req.body ?? {};
+  const { rows } = await pool.query(
+    `UPDATE response_types
+     SET name = $1, types = $2, negative_types = $3
+     WHERE id = $4 AND tenant_id = $5
+     RETURNING id, name, types, negative_types, created_at`,
+    [
+      name,
+      JSON.stringify(types ?? []),
+      JSON.stringify(negative_types ?? []),
+      id,
+      req.user?.tenant_id,
+    ]
+  );
+  if (!rows[0]) {
+    return res.status(404).json({ detail: 'Response type not found' });
+  }
+  return res.json(rows[0]);
+});
+
 router.delete('/response-types/:id', requireAuth, async (req: AuthedRequest, res) => {
   const raw = req.params.id;
   const id = Number(raw);
