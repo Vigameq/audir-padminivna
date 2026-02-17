@@ -13,6 +13,7 @@ import * as functions from 'firebase-functions/v1';
 import jwt from 'jsonwebtoken';
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 import { S3Client, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -48,6 +49,12 @@ const env = {
     process.env.ACCESS_TOKEN_EXPIRE_MINUTES ?? config.access_token_expire_minutes ?? "60",
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? config.frontend_origin ?? "*",
   disableAuditCreate: process.env.DISABLE_AUDIT_CREATE ?? config.disable_audit_create ?? "false",
+  smtpHost: process.env.SMTP_HOST ?? config.smtp_host ?? "",
+  smtpPort: process.env.SMTP_PORT ?? config.smtp_port ?? "587",
+  smtpUser: process.env.SMTP_USER ?? config.smtp_user ?? "",
+  smtpPassword: process.env.SMTP_PASSWORD ?? config.smtp_password ?? "",
+  smtpFrom: process.env.SMTP_FROM ?? config.smtp_from ?? "no-reply@auditx.local",
+  smtpSecure: process.env.SMTP_SECURE ?? config.smtp_secure ?? "false",
 };
 
 app.use(cors({ origin: env.frontendOrigin, credentials: true }));
@@ -112,6 +119,55 @@ const sanitizeFilename = (name: string) =>
 
 const jwtSecret = env.jwtSecret;
 const jwtExpiryMinutes = Number(env.accessTokenExpireMinutes);
+const smtpPort = Number(env.smtpPort);
+const smtpSecure = String(env.smtpSecure).toLowerCase() === 'true';
+
+const mailTransporter =
+  env.smtpHost && env.smtpUser && env.smtpPassword && Number.isFinite(smtpPort)
+    ? nodemailer.createTransport({
+        host: env.smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: {
+          user: env.smtpUser,
+          pass: env.smtpPassword,
+        },
+      })
+    : null;
+
+const sendWelcomeEmail = async (payload: {
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string | null;
+  password?: string | null;
+}) => {
+  if (!mailTransporter) {
+    return;
+  }
+  const fullName = [payload.firstName, payload.lastName].filter(Boolean).join(' ').trim();
+  const displayName = fullName || payload.email;
+  const lines = [
+    `Hi ${displayName},`,
+    '',
+    'Welcome to Padmini Mechatronics - AuditX.',
+    '',
+    `Your account has been created with role: ${payload.role ?? 'User'}.`,
+    `Login email: ${payload.email}`,
+  ];
+  if (payload.password) {
+    lines.push(`Temporary password: ${payload.password}`);
+  }
+  lines.push('');
+  lines.push('Please sign in and update your password if required.');
+
+  await mailTransporter.sendMail({
+    from: env.smtpFrom,
+    to: payload.email,
+    subject: 'Welcome to Padmini Mechatronics - AuditX',
+    text: lines.join('\n'),
+  });
+};
 
 const requireAuth = (req: AuthedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization ?? '';
@@ -179,6 +235,8 @@ router.get('/users', requireAuth, async (req: AuthedRequest, res) => {
 
 router.post('/users', requireAuth, async (req: AuthedRequest, res) => {
   const payload = req.body ?? {};
+  const userEmail = String(payload.email ?? '').toLowerCase();
+  const rawPassword = String(payload.password ?? '');
   const passwordHash = await bcrypt.hash(String(payload.password ?? ''), 10);
   const { rows } = await pool.query(
     `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, phone, department, role, status, created_at)
@@ -186,7 +244,7 @@ router.post('/users', requireAuth, async (req: AuthedRequest, res) => {
      RETURNING id, email, first_name, last_name, phone, department, role, status, last_active, created_at`,
     [
       req.user?.tenant_id,
-      String(payload.email ?? '').toLowerCase(),
+      userEmail,
       passwordHash,
       payload.first_name ?? null,
       payload.last_name ?? null,
@@ -204,6 +262,20 @@ router.post('/users', requireAuth, async (req: AuthedRequest, res) => {
        ON CONFLICT (tenant_id, audit_answer_id) DO NOTHING`,
       [req.user?.tenant_id, result.id]
     );
+  }
+  try {
+    await sendWelcomeEmail({
+      email: userEmail,
+      firstName: payload.first_name ?? null,
+      lastName: payload.last_name ?? null,
+      role: payload.role ?? null,
+      password: rawPassword || null,
+    });
+  } catch (error) {
+    functions.logger.error('Failed to send welcome email', {
+      email: userEmail,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
   return res.status(201).json(result);
 });
