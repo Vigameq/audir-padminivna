@@ -31,8 +31,18 @@ export type SupplierPpapRecord = {
   approvedBy: string;
   approvedAt: string;
   remarks: string;
+  documents: SupplierPpapDocument[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type SupplierPpapDocument = {
+  id: number;
+  ppapId: number;
+  fileName: string;
+  fileKey: string;
+  fileUrl: string;
+  createdAt: string;
 };
 
 export type SupplierPerformanceRecord = {
@@ -200,7 +210,7 @@ export class SupplierService {
 
   createPpap(payload: {
     supplier_id: number;
-    part_no: string;
+    part_no?: string | null;
     level?: string;
     submission_date?: string | null;
     approval_status?: PpapApprovalStatus;
@@ -225,6 +235,41 @@ export class SupplierService {
       map((row) => this.mapPpap(row)),
       tap(() => this.listPpap().subscribe())
     );
+  }
+
+  getPpapDocumentUploadUrls(payload: {
+    ppap_id: number;
+    files: { name: string; type: string }[];
+  }): Observable<{
+    folderUrl: string;
+    uploads: { name: string; key: string; uploadUrl: string; publicUrl: string }[];
+  }> {
+    return this.http.post<{
+      folderUrl: string;
+      uploads: { name: string; key: string; uploadUrl: string; publicUrl: string }[];
+    }>(`${this.baseUrl}/supplier-ppap/${payload.ppap_id}/documents/presign`, {
+      files: payload.files,
+    });
+  }
+
+  addPpapDocuments(payload: {
+    ppap_id: number;
+    documents: { name: string; key: string; url: string }[];
+  }): Observable<SupplierPpapDocument[]> {
+    return this.http
+      .post<unknown[]>(`${this.baseUrl}/supplier-ppap/${payload.ppap_id}/documents`, {
+        documents: payload.documents,
+      })
+      .pipe(
+        map((rows) => (Array.isArray(rows) ? rows.map((row) => this.mapPpapDocument(row)) : [])),
+        tap(() => this.listPpap().subscribe())
+      );
+  }
+
+  deletePpapDocument(ppapId: number, documentId: number): Observable<{ ok: boolean }> {
+    return this.http
+      .delete<{ ok: boolean }>(`${this.baseUrl}/supplier-ppap/${ppapId}/documents/${documentId}`)
+      .pipe(tap(() => this.listPpap().subscribe()));
   }
 
   listPerformance(): Observable<SupplierPerformanceRecord[]> {
@@ -378,8 +423,22 @@ export class SupplierService {
       approvedBy: String(payload?.approved_by ?? ''),
       approvedAt: String(payload?.approved_at ?? ''),
       remarks: String(payload?.remarks ?? ''),
+      documents: Array.isArray(payload?.documents)
+        ? payload.documents.map((row: unknown) => this.mapPpapDocument(row))
+        : [],
       createdAt: String(payload?.created_at ?? ''),
       updatedAt: String(payload?.updated_at ?? ''),
+    };
+  }
+
+  private mapPpapDocument(payload: any): SupplierPpapDocument {
+    return {
+      id: Number(payload?.id ?? 0),
+      ppapId: Number(payload?.ppap_id ?? 0),
+      fileName: String(payload?.file_name ?? ''),
+      fileKey: String(payload?.file_key ?? ''),
+      fileUrl: String(payload?.file_url ?? ''),
+      createdAt: String(payload?.created_at ?? ''),
     };
   }
 

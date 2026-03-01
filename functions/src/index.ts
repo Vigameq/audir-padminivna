@@ -628,6 +628,30 @@ const generateMsaCode = () => {
   return `MSA-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
 };
 
+const PPAP_LEVEL_OPTIONS = [
+  'Level 1 (Warranty only)',
+  'Level 2 (Warrant + Limited samples)',
+  'Level 3 (Full PPAP package)',
+  'Level 4 (Customer-specific requirements)',
+  'Level 5 (On-site review)',
+] as const;
+
+const normalizePpapLevel = (value: unknown) => {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return PPAP_LEVEL_OPTIONS[2];
+  }
+  if ((PPAP_LEVEL_OPTIONS as readonly string[]).includes(raw)) {
+    return raw;
+  }
+  const match = raw.match(/^level\s*([1-5])$/i);
+  if (match) {
+    const index = Number(match[1]) - 1;
+    return PPAP_LEVEL_OPTIONS[index] ?? null;
+  }
+  return null;
+};
+
 type ComplaintEscalationRule = {
   level: number;
   thresholdHours: number;
@@ -2125,17 +2149,52 @@ router.get('/supplier-ppap', requireAuth, async (req: AuthedRequest, res) => {
   if (req.user?.role === 'Customer') {
     return res.status(403).json({ detail: 'Not authorized' });
   }
-  const { rows } = await pool.query(
-    `SELECT p.id, p.supplier_id, s.code AS supplier_code, s.name AS supplier_name, p.part_no, p.level,
-            p.submission_date, p.approval_status, p.approved_by, p.approved_at, p.remarks,
-            p.created_at, p.updated_at
-     FROM supplier_ppap p
-     JOIN suppliers s ON s.id = p.supplier_id
-     WHERE p.tenant_id = $1
-     ORDER BY p.created_at DESC`,
-    [req.user?.tenant_id]
-  );
-  return res.json(rows);
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.id, p.supplier_id, s.code AS supplier_code, s.name AS supplier_name, p.part_no, p.level,
+              p.submission_date, p.approval_status, p.approved_by, p.approved_at, p.remarks,
+              p.created_at, p.updated_at,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'id', d.id,
+                    'file_name', d.file_name,
+                    'file_key', d.file_key,
+                    'file_url', d.file_url,
+                    'created_at', d.created_at
+                  )
+                  ORDER BY d.created_at DESC
+                ) FILTER (WHERE d.id IS NOT NULL),
+                '[]'::json
+              ) AS documents
+       FROM supplier_ppap p
+       JOIN suppliers s ON s.id = p.supplier_id
+       LEFT JOIN supplier_ppap_documents d
+         ON d.ppap_id = p.id AND d.tenant_id = p.tenant_id
+       WHERE p.tenant_id = $1
+       GROUP BY p.id, s.code, s.name
+       ORDER BY p.created_at DESC`,
+      [req.user?.tenant_id]
+    );
+    return res.json(rows);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('supplier_ppap_documents')) {
+      throw error;
+    }
+    const fallback = await pool.query(
+      `SELECT p.id, p.supplier_id, s.code AS supplier_code, s.name AS supplier_name, p.part_no, p.level,
+              p.submission_date, p.approval_status, p.approved_by, p.approved_at, p.remarks,
+              p.created_at, p.updated_at,
+              '[]'::json AS documents
+       FROM supplier_ppap p
+       JOIN suppliers s ON s.id = p.supplier_id
+       WHERE p.tenant_id = $1
+       ORDER BY p.created_at DESC`,
+      [req.user?.tenant_id]
+    );
+    return res.json(fallback.rows);
+  }
 });
 
 router.post('/supplier-ppap', requireAuth, async (req: AuthedRequest, res) => {
@@ -2144,16 +2203,19 @@ router.post('/supplier-ppap', requireAuth, async (req: AuthedRequest, res) => {
   }
   const payload = req.body ?? {};
   const supplierId = Number(payload.supplier_id);
-  const partNo = String(payload.part_no ?? '').trim();
+  const partNo = String(payload.part_no ?? '').trim() || 'N/A';
   if (!supplierId) {
     return res.status(400).json({ detail: 'supplier_id is required' });
-  }
-  if (!partNo) {
-    return res.status(400).json({ detail: 'part_no is required' });
   }
   const approvalStatus = String(payload.approval_status ?? 'Pending').trim();
   if (!['Pending', 'Approved', 'Rejected'].includes(approvalStatus)) {
     return res.status(400).json({ detail: 'Invalid approval_status' });
+  }
+  const level = normalizePpapLevel(payload.level);
+  if (!level) {
+    return res.status(400).json({
+      detail: `Invalid PPAP level. Allowed values: ${PPAP_LEVEL_OPTIONS.join(', ')}`,
+    });
   }
 
   const supplierQuery = await pool.query(
@@ -2177,7 +2239,7 @@ router.post('/supplier-ppap', requireAuth, async (req: AuthedRequest, res) => {
       req.user?.tenant_id,
       supplierId,
       partNo,
-      payload.level ?? 'Level 3',
+      level,
       payload.submission_date ?? null,
       approvalStatus,
       payload.approved_by ?? null,
@@ -2213,6 +2275,16 @@ router.put('/supplier-ppap/:id', requireAuth, async (req: AuthedRequest, res) =>
   if (approvalStatus !== undefined && !['Pending', 'Approved', 'Rejected'].includes(String(approvalStatus))) {
     return res.status(400).json({ detail: 'Invalid approval_status' });
   }
+  const levelFieldIndex = fields.findIndex(([field]) => field === 'level');
+  if (levelFieldIndex >= 0) {
+    const normalized = normalizePpapLevel(fields[levelFieldIndex][1]);
+    if (!normalized) {
+      return res.status(400).json({
+        detail: `Invalid PPAP level. Allowed values: ${PPAP_LEVEL_OPTIONS.join(', ')}`,
+      });
+    }
+    fields[levelFieldIndex] = ['level', normalized];
+  }
   if (approvalStatus !== undefined) {
     fields.push(['approved_at', String(approvalStatus) === 'Approved' ? new Date().toISOString() : null]);
   }
@@ -2231,6 +2303,145 @@ router.put('/supplier-ppap/:id', requireAuth, async (req: AuthedRequest, res) =>
     return res.status(404).json({ detail: 'PPAP record not found' });
   }
   return res.json(rows[0]);
+});
+
+router.post('/supplier-ppap/:id/documents/presign', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  if (!spacesClient || !spacesBucket || !spacesPublicBase) {
+    return res.status(500).json({ detail: 'Spaces configuration missing' });
+  }
+  const ppapId = Number(req.params.id);
+  if (!ppapId) {
+    return res.status(400).json({ detail: 'Invalid PPAP id' });
+  }
+  const ppapResult = await pool.query(
+    'SELECT id FROM supplier_ppap WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+    [ppapId, req.user?.tenant_id]
+  );
+  if (!ppapResult.rows.length) {
+    return res.status(404).json({ detail: 'PPAP record not found' });
+  }
+  const files = Array.isArray(req.body?.files) ? req.body.files : [];
+  if (!files.length) {
+    return res.status(400).json({ detail: 'Missing files' });
+  }
+  const folder = `supplier-ppap/${ppapId}`;
+  const uploads = await Promise.all(
+    files.map(async (file: any, index: number) => {
+      const originalName = String(file?.name ?? `document-${index + 1}`);
+      const contentType = String(file?.type ?? 'application/octet-stream');
+      const key = `${folder}/${Date.now()}-${sanitizeFilename(originalName)}`;
+      const command = new PutObjectCommand({
+        Bucket: spacesBucket,
+        Key: key,
+        ContentType: contentType,
+        ACL: 'public-read',
+      });
+      const uploadUrl = await getSignedUrl(spacesClient, command, { expiresIn: 900 });
+      const publicUrl = `${spacesPublicBase.replace(/\/$/, '')}/${key}`;
+      return { name: originalName, key, uploadUrl, publicUrl };
+    })
+  );
+  return res.json({
+    folderUrl: `${spacesPublicBase.replace(/\/$/, '')}/${folder}/`,
+    uploads,
+  });
+});
+
+router.post('/supplier-ppap/:id/documents', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const ppapId = Number(req.params.id);
+  if (!ppapId) {
+    return res.status(400).json({ detail: 'Invalid PPAP id' });
+  }
+  const ppapResult = await pool.query(
+    'SELECT id FROM supplier_ppap WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+    [ppapId, req.user?.tenant_id]
+  );
+  if (!ppapResult.rows.length) {
+    return res.status(404).json({ detail: 'PPAP record not found' });
+  }
+  const documents = Array.isArray(req.body?.documents) ? req.body.documents : [];
+  if (!documents.length) {
+    return res.status(400).json({ detail: 'Missing documents' });
+  }
+  const folderPrefix = `supplier-ppap/${ppapId}/`;
+  const values: unknown[] = [];
+  const tuples: string[] = [];
+  for (let index = 0; index < documents.length; index += 1) {
+    const doc = documents[index] ?? {};
+    const fileName = String(doc.name ?? '').trim();
+    const fileKey = String(doc.key ?? '').replace(/^\/+/, '');
+    const fileUrl = String(doc.url ?? '').trim();
+    if (!fileName || !fileKey || !fileUrl || !fileKey.startsWith(folderPrefix)) {
+      return res.status(400).json({ detail: 'Invalid document payload' });
+    }
+    const start = values.length;
+    values.push(
+      req.user?.tenant_id,
+      ppapId,
+      fileName,
+      fileKey,
+      fileUrl,
+      Number(req.user?.sub ?? 0) || null
+    );
+    tuples.push(`($${start + 1}, $${start + 2}, $${start + 3}, $${start + 4}, $${start + 5}, $${start + 6}, NOW())`);
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO supplier_ppap_documents
+      (tenant_id, ppap_id, file_name, file_key, file_url, uploaded_by, created_at)
+     VALUES ${tuples.join(', ')}
+     RETURNING id, ppap_id, file_name, file_key, file_url, created_at`,
+    values
+  );
+  return res.status(201).json(rows);
+});
+
+router.delete('/supplier-ppap/:id/documents/:documentId', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const ppapId = Number(req.params.id);
+  const documentId = Number(req.params.documentId);
+  if (!ppapId || !documentId) {
+    return res.status(400).json({ detail: 'Invalid ids' });
+  }
+  const existing = await pool.query(
+    `SELECT id, file_key
+     FROM supplier_ppap_documents
+     WHERE id = $1 AND ppap_id = $2 AND tenant_id = $3`,
+    [documentId, ppapId, req.user?.tenant_id]
+  );
+  if (!existing.rows.length) {
+    return res.status(404).json({ detail: 'Document not found' });
+  }
+  const fileKey = String(existing.rows[0].file_key ?? '');
+  await pool.query(
+    'DELETE FROM supplier_ppap_documents WHERE id = $1 AND ppap_id = $2 AND tenant_id = $3',
+    [documentId, ppapId, req.user?.tenant_id]
+  );
+  if (spacesClient && spacesBucket && fileKey) {
+    try {
+      await spacesClient.send(
+        new DeleteObjectCommand({
+          Bucket: spacesBucket,
+          Key: fileKey,
+        })
+      );
+    } catch (error) {
+      functions.logger.warn('Failed to delete PPAP document from Spaces', {
+        ppapId,
+        documentId,
+        fileKey,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return res.json({ ok: true });
 });
 
 router.get('/supplier-performance', requireAuth, async (req: AuthedRequest, res) => {

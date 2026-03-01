@@ -1,9 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { firstValueFrom, forkJoin } from 'rxjs';
 import {
-  PpapApprovalStatus,
   SupplierAuditStatus,
   SupplierDashboardSummary,
   SupplierService,
@@ -37,7 +36,13 @@ export class SupplierManagement implements OnInit {
 
   protected readonly tab = signal<'dashboard' | 'master' | 'ppap' | 'performance' | 'ppm' | 'worst' | 'audits'>('dashboard');
   protected readonly supplierStatusOptions: SupplierStatus[] = ['Active', 'Inactive', 'Blocked'];
-  protected readonly ppapStatusOptions: PpapApprovalStatus[] = ['Pending', 'Approved', 'Rejected'];
+  protected readonly ppapLevelOptions: string[] = [
+    'Level 1 (Warranty only)',
+    'Level 2 (Warrant + Limited samples)',
+    'Level 3 (Full PPAP package)',
+    'Level 4 (Customer-specific requirements)',
+    'Level 5 (On-site review)',
+  ];
   protected readonly auditStatusOptions: SupplierAuditStatus[] = ['Planned', 'In Progress', 'Closed'];
 
   protected readonly suppliers = computed(() => this.supplierService.suppliers());
@@ -62,13 +67,13 @@ export class SupplierManagement implements OnInit {
 
   protected ppapForm = {
     supplierId: 0,
-    partNo: '',
-    level: 'Level 3',
+    level: 'Level 3 (Full PPAP package)',
     submissionDate: '',
-    approvalStatus: 'Pending' as PpapApprovalStatus,
-    approvedBy: '',
     remarks: '',
   };
+  protected createPpapFiles: File[] = [];
+  protected ppapRecordFiles: Record<number, File[]> = {};
+  protected uploadingPpapDocs: Record<number, boolean> = {};
 
   protected performanceForm = {
     supplierId: 0,
@@ -100,7 +105,6 @@ export class SupplierManagement implements OnInit {
   };
 
   protected supplierEditDraft: Record<number, { status: SupplierStatus }> = {};
-  protected ppapEditDraft: Record<number, { approvalStatus: PpapApprovalStatus }> = {};
   protected auditEditDraft: Record<number, { status: SupplierAuditStatus }> = {};
 
   ngOnInit(): void {
@@ -186,50 +190,64 @@ export class SupplierManagement implements OnInit {
   }
 
   protected createPpap(): void {
-    if (!this.ppapForm.supplierId || !this.ppapForm.partNo.trim()) {
+    if (!this.ppapForm.supplierId) {
       return;
     }
     this.supplierService
       .createPpap({
         supplier_id: this.ppapForm.supplierId,
-        part_no: this.ppapForm.partNo.trim(),
-        level: this.ppapForm.level.trim() || 'Level 3',
+        level: this.ppapForm.level.trim() || this.ppapLevelOptions[2],
         submission_date: this.ppapForm.submissionDate || null,
-        approval_status: this.ppapForm.approvalStatus,
-        approved_by: this.ppapForm.approvedBy.trim() || null,
         remarks: this.ppapForm.remarks.trim() || null,
       })
       .subscribe({
-        next: () => {
+        next: async (record) => {
+          try {
+            if (this.createPpapFiles.length) {
+              await this.uploadPpapFiles(record.id, this.createPpapFiles);
+            }
+          } catch {
+            window.alert('PPAP created, but document upload failed.');
+          }
           this.ppapForm = {
             supplierId: 0,
-            partNo: '',
-            level: 'Level 3',
+            level: this.ppapLevelOptions[2],
             submissionDate: '',
-            approvalStatus: 'Pending',
-            approvedBy: '',
             remarks: '',
           };
+          this.createPpapFiles = [];
           this.supplierService.listDashboardSummary().subscribe();
         },
       });
   }
 
-  protected patchPpapStatus(id: number, approvalStatus: PpapApprovalStatus): void {
-    this.ppapEditDraft[id] = { approvalStatus };
+  protected onCreatePpapFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    this.createPpapFiles = files;
   }
 
-  protected savePpapStatus(id: number): void {
-    const draft = this.ppapEditDraft[id];
-    if (!draft) {
+  protected onPpapRecordFilesSelected(ppapId: number, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    this.ppapRecordFiles[ppapId] = files;
+  }
+
+  protected async uploadPpapDocuments(ppapId: number): Promise<void> {
+    const files = this.ppapRecordFiles[ppapId] ?? [];
+    if (!files.length) {
       return;
     }
-    this.supplierService.updatePpap(id, { approval_status: draft.approvalStatus }).subscribe({
-      next: () => {
-        delete this.ppapEditDraft[id];
-        this.supplierService.listDashboardSummary().subscribe();
-      },
-    });
+    try {
+      await this.uploadPpapFiles(ppapId, files);
+    } catch {
+      window.alert('Unable to upload PPAP documents. Please try again.');
+    }
+    this.ppapRecordFiles[ppapId] = [];
+  }
+
+  protected deletePpapDocument(ppapId: number, documentId: number): void {
+    this.supplierService.deletePpapDocument(ppapId, documentId).subscribe();
   }
 
   protected createPerformance(): void {
@@ -359,5 +377,50 @@ export class SupplierManagement implements OnInit {
     const max = Math.max(1, aging.bucket0to7, aging.bucket8to15, aging.bucket16to30, aging.bucketGt30);
     const normalized = Math.max(0, value / max);
     return `${Math.max(5, Math.round(normalized * 100))}%`;
+  }
+
+  private async uploadPpapFiles(ppapId: number, files: File[]): Promise<void> {
+    if (!files.length) {
+      return;
+    }
+    this.uploadingPpapDocs[ppapId] = true;
+    try {
+      const presign = await firstValueFrom(
+        this.supplierService.getPpapDocumentUploadUrls({
+          ppap_id: ppapId,
+          files: files.map((file) => ({ name: file.name, type: file.type || 'application/octet-stream' })),
+        })
+      );
+      const uploaded: { name: string; key: string; url: string }[] = [];
+      for (let index = 0; index < presign.uploads.length; index += 1) {
+        const upload = presign.uploads[index];
+        const file = files[index];
+        const response = await fetch(upload.uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        });
+        if (!response.ok) {
+          throw new Error(`Upload failed for ${file.name}`);
+        }
+        uploaded.push({
+          name: file.name,
+          key: upload.key,
+          url: upload.publicUrl,
+        });
+      }
+      if (uploaded.length) {
+        await firstValueFrom(
+          this.supplierService.addPpapDocuments({
+            ppap_id: ppapId,
+            documents: uploaded,
+          })
+        );
+      }
+    } finally {
+      this.uploadingPpapDocs[ppapId] = false;
+    }
   }
 }

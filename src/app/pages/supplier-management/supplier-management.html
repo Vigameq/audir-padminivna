@@ -186,50 +186,58 @@
         </select>
       </label>
       <label>
-        Part no
-        <input type="text" [(ngModel)]="ppapForm.partNo" name="ppapPartNo" placeholder="Part number" />
-      </label>
-      <label>
         PPAP level
-        <input type="text" [(ngModel)]="ppapForm.level" name="ppapLevel" placeholder="Level 3" />
+        <select [(ngModel)]="ppapForm.level" name="ppapLevel">
+          <option *ngFor="let level of ppapLevelOptions" [value]="level">{{ level }}</option>
+        </select>
       </label>
       <label>
         Submission date
         <input type="date" [(ngModel)]="ppapForm.submissionDate" name="ppapSubmissionDate" />
       </label>
-      <label>
-        Approval status
-        <select [(ngModel)]="ppapForm.approvalStatus" name="ppapApprovalStatus">
-          <option *ngFor="let status of ppapStatusOptions" [value]="status">{{ status }}</option>
-        </select>
-      </label>
-      <label>
-        Approved by
-        <input type="text" [(ngModel)]="ppapForm.approvedBy" name="ppapApprovedBy" placeholder="Approver" />
-      </label>
       <label class="full">
         Remarks
         <textarea rows="2" [(ngModel)]="ppapForm.remarks" name="ppapRemarks" placeholder="Remarks"></textarea>
       </label>
+      <label class="full">
+        Level documents
+        <input type="file" multiple (change)="onCreatePpapFilesSelected($event)" />
+      </label>
     </div>
     <div class="card-actions">
-      <button class="primary" type="button" (click)="createPpap()" [disabled]="!ppapForm.supplierId || !ppapForm.partNo.trim()">Create PPAP record</button>
+      <button class="primary" type="button" (click)="createPpap()" [disabled]="!ppapForm.supplierId">Create PPAP record</button>
     </div>
 
     <div class="list" *ngIf="ppap().length; else noPpap">
-      <article class="item" *ngFor="let record of ppap()">
+      <article class="item ppap-item" *ngFor="let record of ppap()">
         <div class="item-main">
-          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.partNo }}</h3>
-          <p>{{ record.level }} · Submission: {{ record.submissionDate ? (record.submissionDate | date:'dd-MM-yyyy') : '—' }} · Approved by: {{ record.approvedBy || '—' }}</p>
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }}</h3>
+          <p>{{ record.level }} · Submission: {{ record.submissionDate ? (record.submissionDate | date:'dd-MM-yyyy') : '—' }}</p>
+          <div class="ppap-document-list" *ngIf="record.documents.length">
+            <a
+              class="ppap-document-link"
+              *ngFor="let document of record.documents"
+              [href]="document.fileUrl"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ document.fileName }}
+            </a>
+          </div>
         </div>
-        <div class="item-actions">
-          <select
-            [ngModel]="ppapEditDraft[record.id]?.approvalStatus || record.approvalStatus"
-            (ngModelChange)="patchPpapStatus(record.id, $event)"
+        <div class="item-actions ppap-doc-actions">
+          <input type="file" multiple (change)="onPpapRecordFilesSelected(record.id, $event)" />
+          <button class="ghost" type="button" (click)="uploadPpapDocuments(record.id)" [disabled]="uploadingPpapDocs[record.id]">
+            {{ uploadingPpapDocs[record.id] ? 'Uploading...' : 'Upload docs' }}
+          </button>
+          <button
+            class="ghost"
+            type="button"
+            *ngFor="let document of record.documents"
+            (click)="deletePpapDocument(record.id, document.id)"
           >
-            <option *ngFor="let status of ppapStatusOptions" [value]="status">{{ status }}</option>
-          </select>
-          <button class="ghost" type="button" (click)="savePpapStatus(record.id)">Save</button>
+            Delete {{ document.fileName }}
+          </button>
         </div>
       </article>
     </div>
