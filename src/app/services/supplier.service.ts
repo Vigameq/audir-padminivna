@@ -266,6 +266,10 @@ export class SupplierService {
       );
   }
 
+  getPpapDocumentDownloadUrl(ppapId: number, documentId: number): Observable<{ url: string }> {
+    return this.http.get<{ url: string }>(`${this.baseUrl}/supplier-ppap/${ppapId}/documents/${documentId}/presign-read`);
+  }
+
   deletePpapDocument(ppapId: number, documentId: number): Observable<{ ok: boolean }> {
     return this.http
       .delete<{ ok: boolean }>(`${this.baseUrl}/supplier-ppap/${ppapId}/documents/${documentId}`)

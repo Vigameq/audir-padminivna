@@ -2411,6 +2411,49 @@ router.post('/supplier-ppap/:id/documents', requireAuth, async (req: AuthedReque
   }
 });
 
+router.get('/supplier-ppap/:id/documents/:documentId/presign-read', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const ppapId = Number(req.params.id);
+  const documentId = Number(req.params.documentId);
+  if (!ppapId || !documentId) {
+    return res.status(400).json({ detail: 'Invalid ids' });
+  }
+  const existing = await pool.query(
+    `SELECT id, file_key, file_url
+     FROM supplier_ppap_documents
+     WHERE id = $1 AND ppap_id = $2 AND tenant_id = $3`,
+    [documentId, ppapId, req.user?.tenant_id]
+  );
+  if (!existing.rows.length) {
+    return res.status(404).json({ detail: 'Document not found' });
+  }
+
+  const fileKey = String(existing.rows[0].file_key ?? '').trim();
+  const fileUrl = String(existing.rows[0].file_url ?? '').trim();
+  if (!fileKey) {
+    return res.status(400).json({ detail: 'Invalid document key' });
+  }
+
+  if (!spacesClient || !spacesBucket) {
+    return res.json({ url: fileUrl });
+  }
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: spacesBucket,
+      Key: fileKey,
+    });
+    const url = await getSignedUrl(spacesClient, command, { expiresIn: 900 });
+    return res.json({ url });
+  } catch (error) {
+    return res.status(500).json({
+      detail: error instanceof Error ? error.message : 'Failed to generate download url',
+    });
+  }
+});
+
 router.delete('/supplier-ppap/:id/documents/:documentId', requireAuth, async (req: AuthedRequest, res) => {
   if (req.user?.role === 'Customer') {
     return res.status(403).json({ detail: 'Not authorized' });
