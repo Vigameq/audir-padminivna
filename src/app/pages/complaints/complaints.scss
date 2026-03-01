@@ -265,6 +265,18 @@ button:disabled {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  color: var(--color-ink);
+}
+
+.link-button.ghost {
+  background: var(--color-surface);
+  border: 1px solid rgba(0, 179, 136, 0.35);
+}
+
+.link-button.small {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
 }
 
 .empty {
