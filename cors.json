@@ -1,21 +1,13 @@
 {
   "CORSRules": [
     {
-      "AllowedHeaders": [
-        "content-type",
-        "x-amz-acl",
-        "x-amz-checksum-crc32",
-        "x-amz-content-sha256",
-        "x-amz-date",
-        "x-amz-sdk-checksum-algorithm"
-      ],
-      "AllowedMethods": ["GET", "PUT", "HEAD", "POST"],
       "AllowedOrigins": [
-        "https://auditx-tierx.web.app",
-        "https://padminivna-auditx.web.app",
-        "https://padminivna-auditx.firebaseapp.com",
-        "http://localhost:4200"
+        "http://localhost:4200",
+        "https://padminivna-auditx.web.app"
       ],
+      "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
       "MaxAgeSeconds": 3000
     }
   ]

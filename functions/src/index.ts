@@ -2354,51 +2354,61 @@ router.post('/supplier-ppap/:id/documents', requireAuth, async (req: AuthedReque
   if (req.user?.role === 'Customer') {
     return res.status(403).json({ detail: 'Not authorized' });
   }
-  const ppapId = Number(req.params.id);
-  if (!ppapId) {
-    return res.status(400).json({ detail: 'Invalid PPAP id' });
-  }
-  const ppapResult = await pool.query(
-    'SELECT id FROM supplier_ppap WHERE id = $1 AND tenant_id = $2 LIMIT 1',
-    [ppapId, req.user?.tenant_id]
-  );
-  if (!ppapResult.rows.length) {
-    return res.status(404).json({ detail: 'PPAP record not found' });
-  }
-  const documents = Array.isArray(req.body?.documents) ? req.body.documents : [];
-  if (!documents.length) {
-    return res.status(400).json({ detail: 'Missing documents' });
-  }
-  const folderPrefix = `supplier-ppap/${ppapId}/`;
-  const values: unknown[] = [];
-  const tuples: string[] = [];
-  for (let index = 0; index < documents.length; index += 1) {
-    const doc = documents[index] ?? {};
-    const fileName = String(doc.name ?? '').trim();
-    const fileKey = String(doc.key ?? '').replace(/^\/+/, '');
-    const fileUrl = String(doc.url ?? '').trim();
-    if (!fileName || !fileKey || !fileUrl || !fileKey.startsWith(folderPrefix)) {
-      return res.status(400).json({ detail: 'Invalid document payload' });
+  try {
+    const ppapId = Number(req.params.id);
+    if (!ppapId) {
+      return res.status(400).json({ detail: 'Invalid PPAP id' });
     }
-    const start = values.length;
-    values.push(
-      req.user?.tenant_id,
-      ppapId,
-      fileName,
-      fileKey,
-      fileUrl,
-      Number(req.user?.sub ?? 0) || null
+    const ppapResult = await pool.query(
+      'SELECT id FROM supplier_ppap WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+      [ppapId, req.user?.tenant_id]
     );
-    tuples.push(`($${start + 1}, $${start + 2}, $${start + 3}, $${start + 4}, $${start + 5}, $${start + 6}, NOW())`);
+    if (!ppapResult.rows.length) {
+      return res.status(404).json({ detail: 'PPAP record not found' });
+    }
+    const documents = Array.isArray(req.body?.documents) ? req.body.documents : [];
+    if (!documents.length) {
+      return res.status(400).json({ detail: 'Missing documents' });
+    }
+    const folderPrefix = `supplier-ppap/${ppapId}/`;
+    const values: unknown[] = [];
+    const tuples: string[] = [];
+    for (let index = 0; index < documents.length; index += 1) {
+      const doc = documents[index] ?? {};
+      const fileName = String(doc.name ?? '').trim();
+      const fileKey = String(doc.key ?? '').replace(/^\/+/, '');
+      const fileUrl = String(doc.url ?? '').trim();
+      if (!fileName || !fileKey || !fileUrl || !fileKey.startsWith(folderPrefix)) {
+        return res.status(400).json({ detail: 'Invalid document payload' });
+      }
+      const start = values.length;
+      values.push(
+        req.user?.tenant_id,
+        ppapId,
+        fileName,
+        fileKey,
+        fileUrl,
+        Number(req.user?.sub ?? 0) || null
+      );
+      tuples.push(`($${start + 1}, $${start + 2}, $${start + 3}, $${start + 4}, $${start + 5}, $${start + 6}, NOW())`);
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO supplier_ppap_documents
+        (tenant_id, ppap_id, file_name, file_key, file_url, uploaded_by, created_at)
+       VALUES ${tuples.join(', ')}
+       RETURNING id, ppap_id, file_name, file_key, file_url, created_at`,
+      values
+    );
+    return res.status(201).json(rows);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('supplier_ppap_documents')) {
+      return res.status(500).json({
+        detail: 'supplier_ppap_documents table is missing. Run migration 019_supplier_ppap_level_documents.sql.',
+      });
+    }
+    return res.status(500).json({ detail: message || 'Failed to save PPAP documents' });
   }
-  const { rows } = await pool.query(
-    `INSERT INTO supplier_ppap_documents
-      (tenant_id, ppap_id, file_name, file_key, file_url, uploaded_by, created_at)
-     VALUES ${tuples.join(', ')}
-     RETURNING id, ppap_id, file_name, file_key, file_url, created_at`,
-    values
-  );
-  return res.status(201).json(rows);
 });
 
 router.delete('/supplier-ppap/:id/documents/:documentId', requireAuth, async (req: AuthedRequest, res) => {
