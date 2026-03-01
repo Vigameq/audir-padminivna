@@ -56,12 +56,22 @@
             <div class="question-edit">
               <div class="question-edit-header">
                 <span>Questions</span>
+                <span class="drag-hint">Drag by handle</span>
                 <button class="ghost small" type="button" (click)="addQuestion(); $event.stopPropagation()">
                   Add question
                 </button>
               </div>
               <div class="question-edit-list">
-                <div class="question-edit-row" *ngFor="let question of editQuestions; let i = index; trackBy: trackByIndex">
+                <div
+                  class="question-edit-row"
+                  *ngFor="let question of editQuestions; let i = index; trackBy: trackByIndex"
+                  draggable="true"
+                  (dragstart)="onEditQuestionDragStart(i); $event.stopPropagation()"
+                  (dragover)="onEditQuestionDragOver($event); $event.stopPropagation()"
+                  (drop)="onEditQuestionDrop(i); $event.stopPropagation()"
+                  (dragend)="onEditQuestionDragEnd()"
+                >
+                  <span class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>
                   <input
                     type="text"
                     [(ngModel)]="editQuestions[i]"
@@ -99,14 +109,22 @@
                 </button>
               </div>
               <div class="question-pick-list" *ngIf="editQuestions.length">
-                <label class="question-pick-item" *ngFor="let question of editQuestions; let i = index; trackBy: trackByIndex">
+                <div class="question-pick-item" *ngFor="let question of editQuestions; let i = index; trackBy: trackByIndex">
                   <input
+                    [id]="'edit-subsection-q-' + template.id + '-' + i"
                     type="checkbox"
+                    [disabled]="isEditQuestionAssigned(i)"
                     [checked]="!!editSelectedQuestions[i]"
                     (change)="toggleEditQuestionSelection(i, $any($event.target).checked); $event.stopPropagation()"
                   />
-                  <span>Q{{ i + 1 }} · {{ question }}</span>
-                </label>
+                  <label
+                    class="question-pick-text"
+                    [class.assigned]="isEditQuestionAssigned(i)"
+                    [for]="'edit-subsection-q-' + template.id + '-' + i"
+                  >
+                    Q{{ i + 1 }} · {{ question }}
+                  </label>
+                </div>
               </div>
               <div class="subsection-chip-list" *ngIf="editSubsections.length">
                 <div class="subsection-instruction">Drag subsections and questions to reorder.</div>
@@ -120,14 +138,19 @@
                   (dragend)="onSubsectionDragEnd()"
                 >
                   <header>
-                    <strong>{{ section.name }}</strong>
-                    <button
-                      class="ghost small danger"
-                      type="button"
-                      (click)="removeEditSubsection(section.id); $event.stopPropagation()"
-                    >
-                      Remove
-                    </button>
+                    <div class="subsection-title">
+                      <span class="drag-handle" title="Drag to reorder subsection" aria-label="Drag to reorder subsection">⋮⋮</span>
+                      <strong>{{ section.name }}</strong>
+                    </div>
+                    <div class="subsection-actions">
+                      <button
+                        class="ghost small danger"
+                        type="button"
+                        (click)="removeEditSubsection(section.id); $event.stopPropagation()"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </header>
                   <div
                     class="subsection-question-list"
@@ -143,6 +166,7 @@
                       (drop)="onQuestionDrop(section.id, questionIndex); $event.stopPropagation()"
                       (dragend)="onQuestionDragEnd()"
                     >
+                      <span class="drag-handle" title="Drag to reorder question" aria-label="Drag to reorder question">⋮⋮</span>
                       <span>Q{{ questionIndex + 1 }} · {{ subsectionQuestionLabel(questionIndex) }}</span>
                     </div>
                   </div>
@@ -285,14 +309,22 @@
             </button>
           </div>
           <div class="question-pick-list">
-            <label class="question-pick-item" *ngFor="let question of questions; let i = index; trackBy: trackByIndex">
+            <div class="question-pick-item" *ngFor="let question of questions; let i = index; trackBy: trackByIndex">
               <input
+                [id]="'import-subsection-q-' + i"
                 type="checkbox"
+                [disabled]="isImportQuestionAssigned(i)"
                 [checked]="!!importSelectedQuestions[i]"
                 (change)="toggleImportQuestionSelection(i, $any($event.target).checked)"
               />
-              <span>Q{{ i + 1 }} · {{ question }}</span>
-            </label>
+              <label
+                class="question-pick-text"
+                [class.assigned]="isImportQuestionAssigned(i)"
+                [for]="'import-subsection-q-' + i"
+              >
+                Q{{ i + 1 }} · {{ question }}
+              </label>
+            </div>
           </div>
           <div class="subsection-chip-list" *ngIf="importSubsections.length">
             <span class="tag" *ngFor="let section of importSubsections">

@@ -30,7 +30,11 @@ export class NcManagement implements OnInit {
     correctiveAction: '',
     preventiveAction: '',
     evidenceFile: '',
+    gdSummary: '',
+    fishboneData: this.createEmptyFishbone(),
+    whyWhyData: this.createEmptyWhyWhy(),
   };
+  protected readonly whyWhySteps = [1, 2, 3, 4, 5];
   protected users: User[] = [];
   protected assignedOverrides: Record<
     string,
@@ -159,6 +163,12 @@ export class NcManagement implements OnInit {
       correctiveAction: record.correctiveAction || '',
       preventiveAction: record.preventiveAction || '',
       evidenceFile: record.evidenceName || '',
+      gdSummary: record.gdSummary || '',
+      fishboneData: {
+        ...this.createEmptyFishbone(),
+        ...(record.fishboneData ?? {}),
+      },
+      whyWhyData: this.mergeWhyWhy(record.whyWhyData ?? []),
     };
   }
 
@@ -203,6 +213,9 @@ export class NcManagement implements OnInit {
         corrective_action: this.ncResponse.correctiveAction || null,
         preventive_action: this.ncResponse.preventiveAction || null,
         evidence_name: this.ncResponse.evidenceFile || null,
+        gd_summary: this.ncResponse.gdSummary.trim() || null,
+        fishbone_data: this.toFishbonePayload(),
+        why_why_data: this.toWhyWhyPayload(),
         status: 'Resolution Submitted',
       })
       .subscribe({
@@ -225,6 +238,9 @@ export class NcManagement implements OnInit {
         corrective_action: this.ncResponse.correctiveAction || null,
         preventive_action: this.ncResponse.preventiveAction || null,
         evidence_name: this.ncResponse.evidenceFile || null,
+        gd_summary: this.ncResponse.gdSummary.trim() || null,
+        fishbone_data: this.toFishbonePayload(),
+        why_why_data: this.toWhyWhyPayload(),
         status: 'In Progress',
       })
       .subscribe({
@@ -398,6 +414,9 @@ export class NcManagement implements OnInit {
         corrective_action: record.correctiveAction || null,
         preventive_action: record.preventiveAction || null,
         evidence_name: record.evidenceName || null,
+        gd_summary: record.gdSummary || null,
+        fishbone_data: record.fishboneData ?? this.createEmptyFishbone(),
+        why_why_data: this.mergeWhyWhy(record.whyWhyData ?? []),
         status: 'Closed',
       })
       .subscribe({
@@ -419,6 +438,9 @@ export class NcManagement implements OnInit {
         corrective_action: record.correctiveAction || null,
         preventive_action: record.preventiveAction || null,
         evidence_name: record.evidenceName || null,
+        gd_summary: record.gdSummary || null,
+        fishbone_data: record.fishboneData ?? this.createEmptyFishbone(),
+        why_why_data: this.mergeWhyWhy(record.whyWhyData ?? []),
         assigned_user_id: assignedUserId ?? null,
         status: 'Rework',
       })
@@ -508,5 +530,60 @@ export class NcManagement implements OnInit {
       this.openRecord(match);
     }
     this.targetAnswerId = null;
+  }
+
+  protected whyWhyValue(index: number): string {
+    return this.ncResponse.whyWhyData[index] ?? '';
+  }
+
+  protected onWhyWhyChange(index: number, value: string): void {
+    const next = this.mergeWhyWhy(this.ncResponse.whyWhyData);
+    next[index] = value;
+    this.ncResponse.whyWhyData = next;
+  }
+
+  private createEmptyFishbone(): {
+    man: string;
+    machine: string;
+    method: string;
+    material: string;
+    measurement: string;
+    environment: string;
+  } {
+    return {
+      man: '',
+      machine: '',
+      method: '',
+      material: '',
+      measurement: '',
+      environment: '',
+    };
+  }
+
+  private createEmptyWhyWhy(): string[] {
+    return ['', '', '', '', ''];
+  }
+
+  private mergeWhyWhy(input: string[]): string[] {
+    const next = this.createEmptyWhyWhy();
+    input.slice(0, 5).forEach((value, index) => {
+      next[index] = String(value ?? '');
+    });
+    return next;
+  }
+
+  private toFishbonePayload(): Record<string, string> {
+    return {
+      man: this.ncResponse.fishboneData.man.trim(),
+      machine: this.ncResponse.fishboneData.machine.trim(),
+      method: this.ncResponse.fishboneData.method.trim(),
+      material: this.ncResponse.fishboneData.material.trim(),
+      measurement: this.ncResponse.fishboneData.measurement.trim(),
+      environment: this.ncResponse.fishboneData.environment.trim(),
+    };
+  }
+
+  private toWhyWhyPayload(): string[] {
+    return this.mergeWhyWhy(this.ncResponse.whyWhyData).map((value) => value.trim());
   }
 }

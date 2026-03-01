@@ -1,0 +1,146 @@
+<section class="complaints">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Issue handling</p>
+      <h1>Complaints</h1>
+      <p class="subtitle">Track customer/internal complaints for inprocess and supplier categories.</p>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>New complaint</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Complaint type
+        <select [(ngModel)]="createForm.complaintType" name="complaintType">
+          <option *ngFor="let option of typeOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Category
+        <select [(ngModel)]="createForm.category" name="category">
+          <option *ngFor="let option of categoryOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label class="full">
+        Title
+        <input type="text" [(ngModel)]="createForm.title" name="title" placeholder="Complaint title" />
+      </label>
+      <label>
+        Source (Customer/Supplier)
+        <input type="text" [(ngModel)]="createForm.sourceName" name="sourceName" placeholder="Source name" />
+      </label>
+      <label>
+        Reported by
+        <input type="text" [(ngModel)]="createForm.reportedBy" name="reportedBy" placeholder="Reporter" />
+      </label>
+      <label>
+        Complaint date
+        <input type="date" [(ngModel)]="createForm.complaintDate" name="complaintDate" />
+      </label>
+      <label>
+        Assign to
+        <input type="text" [(ngModel)]="createForm.assignedTo" name="assignedTo" placeholder="Owner" />
+      </label>
+      <label class="full">
+        Description
+        <textarea rows="3" [(ngModel)]="createForm.description" name="description" placeholder="Complaint details"></textarea>
+      </label>
+    </div>
+    <div class="form-actions">
+      <p class="error" *ngIf="saveError">{{ saveError }}</p>
+      <button class="primary" type="button" (click)="createComplaint()" [disabled]="saving || !createForm.title.trim()">
+        {{ saving ? 'Saving...' : 'Create complaint' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header register-header">
+      <h2 class="register-title">Complaint register</h2>
+      <div class="filter-row" aria-label="Complaint register filters">
+        <label class="filter-box">
+          <span>Escalation</span>
+          <select [ngModel]="activeEscalation()" (ngModelChange)="setEscalation($event)">
+            <option value="All">All</option>
+            <option value="Escalated">Escalated</option>
+            <option value="Overdue">Overdue</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>Category</span>
+          <select [ngModel]="activeCategory()" (ngModelChange)="setCategory($event)">
+            <option value="All">All</option>
+            <option value="Inprocess">Inprocess</option>
+            <option value="Supplier">Supplier</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>Status</span>
+          <select [ngModel]="activeStatus()" (ngModelChange)="setStatus($event)">
+            <option value="All">All status</option>
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </label>
+        <button class="ghost small escalation-run" type="button" (click)="runEscalationNow()">
+          Run escalation
+        </button>
+      </div>
+    </div>
+    <p class="run-message" *ngIf="runMessage">{{ runMessage }}</p>
+
+    <div class="empty" *ngIf="!complaints().length">No complaints found for selected filters.</div>
+
+    <article class="complaint-card" *ngFor="let record of complaints()">
+      <div class="complaint-head">
+        <div>
+          <p class="code">{{ record.code }}</p>
+          <h3>{{ record.title }}</h3>
+          <p class="meta">{{ record.complaintType }} · {{ record.category }} · {{ record.complaintDate || 'No date' }}</p>
+        </div>
+        <span class="status" [class.closed]="record.status === 'Closed'" [class.inprogress]="record.status === 'In Progress'">{{ record.status }}</span>
+      </div>
+      <p class="description" *ngIf="record.description">{{ record.description }}</p>
+      <div class="details">
+        <span><strong>Source:</strong> {{ record.sourceName || '—' }}</span>
+        <span><strong>Reported by:</strong> {{ record.reportedBy || '—' }}</span>
+        <span><strong>Assigned:</strong> {{ record.assignedTo || '—' }}</span>
+        <span><strong>SLA:</strong> {{ getDueLabel(record) }}</span>
+        <span class="escalation-tag" [ngClass]="getEscalationClass(record)">
+          {{ getEscalationLabel(record) }}
+        </span>
+      </div>
+
+      <div class="edit-row" *ngIf="hasEditDraft(record.id)">
+        <label>
+          Status
+          <select [ngModel]="editDraft[record.id]?.status || record.status" (ngModelChange)="patchDraft(record.id, 'status', $event)">
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label>
+          Assigned to
+          <input type="text" [ngModel]="editDraft[record.id]?.assignedTo ?? record.assignedTo" (ngModelChange)="patchDraft(record.id, 'assignedTo', $event)" />
+        </label>
+        <label class="full">
+          Resolution
+          <textarea rows="2" [ngModel]="editDraft[record.id]?.resolution ?? record.resolution" (ngModelChange)="patchDraft(record.id, 'resolution', $event)"></textarea>
+        </label>
+      </div>
+
+      <p class="resolution" *ngIf="record.resolution && !hasEditDraft(record.id)"><strong>Resolution:</strong> {{ record.resolution }}</p>
+
+      <div class="card-actions" *ngIf="!hasEditDraft(record.id)">
+        <button class="ghost small" type="button" (click)="startEdit(record)">Update</button>
+      </div>
+      <div class="card-actions" *ngIf="hasEditDraft(record.id)">
+        <button class="primary small" type="button" (click)="saveComplaint(record)">Save</button>
+        <button class="ghost small" type="button" (click)="cancelEdit(record.id)">Cancel</button>
+      </div>
+    </article>
+  </section>
+</section>

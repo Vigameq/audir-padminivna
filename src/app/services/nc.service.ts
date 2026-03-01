@@ -25,6 +25,16 @@ export type NcRecord = {
   preventiveAction?: string;
   evidenceName?: string;
   status?: string;
+  gdSummary?: string;
+  fishboneData?: {
+    man: string;
+    machine: string;
+    method: string;
+    material: string;
+    measurement: string;
+    environment: string;
+  };
+  whyWhyData?: string[];
 };
 
 @Injectable({ providedIn: 'root' })
@@ -50,6 +60,9 @@ export class NcService {
     corrective_action?: string | null;
     preventive_action?: string | null;
     evidence_name?: string | null;
+    gd_summary?: string | null;
+    fishbone_data?: Record<string, string> | null;
+    why_why_data?: string[] | null;
     assigned_user_id?: number | null;
     status?: string;
   }): Observable<unknown> {
@@ -105,6 +118,45 @@ export class NcService {
       preventiveAction: String(payload?.preventive_action ?? ''),
       evidenceName: String(payload?.evidence_name ?? ''),
       status: String(payload?.nc_status ?? ''),
+      gdSummary: String(payload?.gd_summary ?? ''),
+      fishboneData: this.parseFishbone(payload?.fishbone_data),
+      whyWhyData: this.parseWhyWhy(payload?.why_why_data),
     };
+  }
+
+  private parseFishbone(payload: any): NcRecord['fishboneData'] {
+    let parsed = payload;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        parsed = {};
+      }
+    }
+    const source =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    return {
+      man: String(source.man ?? ''),
+      machine: String(source.machine ?? ''),
+      method: String(source.method ?? ''),
+      material: String(source.material ?? ''),
+      measurement: String(source.measurement ?? ''),
+      environment: String(source.environment ?? ''),
+    };
+  }
+
+  private parseWhyWhy(payload: any): string[] {
+    let parsed = payload;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        parsed = [];
+      }
+    }
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.slice(0, 5).map((item) => String(item ?? '').trim());
   }
 }

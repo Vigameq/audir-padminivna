@@ -7,6 +7,10 @@ import { DepartmentService } from '../../services/department.service';
 import { RegionService } from '../../services/region.service';
 import { ResponseDefinition, ResponseService } from '../../services/response.service';
 import { SiteService } from '../../services/site.service';
+import {
+  ComplaintEscalationRule,
+  ComplaintService,
+} from '../../services/complaint.service';
 
 @Component({
   selector: 'app-settings',
@@ -21,6 +25,7 @@ export class Settings implements OnInit {
   private readonly siteService = inject(SiteService);
   private readonly regionService = inject(RegionService);
   private readonly responseService = inject(ResponseService);
+  private readonly complaintService = inject(ComplaintService);
   protected newDepartment = '';
   protected newSite = '';
   protected newRegion = '';
@@ -31,6 +36,18 @@ export class Settings implements OnInit {
   protected responseNegativeTypes: string[] = [];
   protected responseTypeNegative = false;
   protected editingResponseId: number | null = null;
+  protected escalationRules: ComplaintEscalationRule[] = [];
+  protected escalationRuleDrafts: Record<
+    number,
+    { thresholdHours: number; notifyRole: ComplaintEscalationRule['notifyRole'] }
+  > = {};
+  protected escalationSaveState: Record<number, 'idle' | 'saving' | 'saved' | 'error'> = {};
+  protected readonly escalationRoleOptions: ComplaintEscalationRule['notifyRole'][] = [
+    'Manager',
+    'Admin',
+    'Super Admin',
+    'Auditor',
+  ];
   protected get responses(): ResponseDefinition[] {
     return this.responseService.responses();
   }
@@ -180,6 +197,77 @@ export class Settings implements OnInit {
     return this.responseNegativeTypes.includes(tag);
   }
 
+  protected getEscalationRuleDraft(
+    rule: ComplaintEscalationRule
+  ): { thresholdHours: number; notifyRole: ComplaintEscalationRule['notifyRole'] } {
+    const existing = this.escalationRuleDrafts[rule.id];
+    if (existing) {
+      return existing;
+    }
+    const next = {
+      thresholdHours: rule.thresholdHours,
+      notifyRole: rule.notifyRole,
+    };
+    this.escalationRuleDrafts[rule.id] = next;
+    return next;
+  }
+
+  protected updateEscalationThreshold(ruleId: number, value: string | number): void {
+    const numeric = Math.max(1, Math.floor(Number(value) || 1));
+    const current = this.escalationRuleDrafts[ruleId];
+    if (!current) {
+      return;
+    }
+    this.escalationRuleDrafts[ruleId] = {
+      ...current,
+      thresholdHours: numeric,
+    };
+    this.escalationSaveState[ruleId] = 'idle';
+  }
+
+  protected updateEscalationRole(
+    ruleId: number,
+    value: ComplaintEscalationRule['notifyRole']
+  ): void {
+    const current = this.escalationRuleDrafts[ruleId];
+    if (!current) {
+      return;
+    }
+    this.escalationRuleDrafts[ruleId] = {
+      ...current,
+      notifyRole: value,
+    };
+    this.escalationSaveState[ruleId] = 'idle';
+  }
+
+  protected saveEscalationRule(rule: ComplaintEscalationRule): void {
+    const draft = this.escalationRuleDrafts[rule.id];
+    if (!draft) {
+      return;
+    }
+    this.escalationSaveState[rule.id] = 'saving';
+    this.complaintService
+      .updateEscalationRule(rule.id, {
+        threshold_hours: draft.thresholdHours,
+        notify_role: draft.notifyRole,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.escalationRules = this.escalationRules.map((item) =>
+            item.id === updated.id ? updated : item
+          );
+          this.escalationRuleDrafts[rule.id] = {
+            thresholdHours: updated.thresholdHours,
+            notifyRole: updated.notifyRole,
+          };
+          this.escalationSaveState[rule.id] = 'saved';
+        },
+        error: () => {
+          this.escalationSaveState[rule.id] = 'error';
+        },
+      });
+  }
+
   ngOnInit(): void {
     if (this.auth.role() !== 'Super Admin') {
       this.router.navigate(['/dashboard']);
@@ -189,5 +277,19 @@ export class Settings implements OnInit {
     this.siteService.migrateFromLocal().subscribe();
     this.regionService.migrateFromLocal().subscribe();
     this.responseService.migrateFromLocal().subscribe();
+    this.complaintService.listEscalationRules().subscribe({
+      next: (rules) => {
+        this.escalationRules = rules;
+        this.escalationRuleDrafts = {};
+        this.escalationSaveState = {};
+        rules.forEach((rule) => {
+          this.escalationRuleDrafts[rule.id] = {
+            thresholdHours: rule.thresholdHours,
+            notifyRole: rule.notifyRole,
+          };
+          this.escalationSaveState[rule.id] = 'idle';
+        });
+      },
+    });
   }
 }

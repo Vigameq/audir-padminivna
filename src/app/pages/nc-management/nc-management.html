@@ -108,7 +108,7 @@
               <span>Asset: {{ record.assetNumber ?? '—' }}</span>
             </div>
           </div>
-          <div class="nc-inline">
+          <div class="nc-inline flagged-actions">
             <span class="status-pill medium">Submitted</span>
             <select
               class="assignee-select"
@@ -189,7 +189,7 @@
               <span>Asset: {{ record.assetNumber ?? '—' }}</span>
             </div>
           </div>
-          <div class="nc-inline">
+          <div class="nc-inline simple-actions">
             <button class="ghost small" type="button" (click)="openReview(record)">
               View
             </button>
@@ -226,7 +226,7 @@
               <span>Status: {{ record.status || 'Closed' }}</span>
             </div>
           </div>
-          <div class="nc-inline">
+          <div class="nc-inline simple-actions">
             <button class="ghost small" type="button" (click)="openClosed(record)">
               View
             </button>
@@ -304,6 +304,75 @@
               Preventive Action
               <textarea rows="2" [(ngModel)]="ncResponse.preventiveAction"></textarea>
             </label>
+            <label class="full">
+              G&D Summary
+              <textarea rows="2" [(ngModel)]="ncResponse.gdSummary" placeholder="Summarize gap/deviation and impact"></textarea>
+            </label>
+          </div>
+          <div class="analysis-section">
+            <h4>Fishbone analysis (6M)</h4>
+            <div class="fishbone-canvas">
+              <svg class="fishbone-svg" viewBox="0 0 1000 520" preserveAspectRatio="none" aria-hidden="true">
+                <line x1="80" y1="260" x2="860" y2="260" class="spine" />
+                <polygon points="860,244 860,276 912,260" class="head" />
+
+                <line x1="220" y1="260" x2="140" y2="140" class="bone" />
+                <line x1="420" y1="260" x2="340" y2="140" class="bone" />
+                <line x1="620" y1="260" x2="540" y2="140" class="bone" />
+
+                <line x1="220" y1="260" x2="140" y2="380" class="bone" />
+                <line x1="420" y1="260" x2="340" y2="380" class="bone" />
+                <line x1="620" y1="260" x2="540" y2="380" class="bone" />
+              </svg>
+
+              <div class="effect-box">
+                <span>Effect / Problem</span>
+                <textarea
+                  rows="3"
+                  [(ngModel)]="ncResponse.gdSummary"
+                  placeholder="Describe the gap/deviation to investigate"
+                ></textarea>
+              </div>
+
+              <label class="bone-input top man">
+                <span>Man</span>
+                <textarea rows="2" [(ngModel)]="ncResponse.fishboneData.man"></textarea>
+              </label>
+              <label class="bone-input top machine">
+                <span>Machine</span>
+                <textarea rows="2" [(ngModel)]="ncResponse.fishboneData.machine"></textarea>
+              </label>
+              <label class="bone-input top method">
+                <span>Method</span>
+                <textarea rows="2" [(ngModel)]="ncResponse.fishboneData.method"></textarea>
+              </label>
+
+              <label class="bone-input bottom material">
+                <span>Material</span>
+                <textarea rows="2" [(ngModel)]="ncResponse.fishboneData.material"></textarea>
+              </label>
+              <label class="bone-input bottom measurement">
+                <span>Measurement</span>
+                <textarea rows="2" [(ngModel)]="ncResponse.fishboneData.measurement"></textarea>
+              </label>
+              <label class="bone-input bottom environment">
+                <span>Environment</span>
+                <textarea rows="2" [(ngModel)]="ncResponse.fishboneData.environment"></textarea>
+              </label>
+            </div>
+          </div>
+          <div class="analysis-section">
+            <h4>Why-Why analysis</h4>
+            <div class="why-grid">
+              <label *ngFor="let step of whyWhySteps; let idx = index">
+                Why {{ step }}
+                <textarea
+                  rows="2"
+                  [ngModel]="whyWhyValue(idx)"
+                  (ngModelChange)="onWhyWhyChange(idx, $event)"
+                ></textarea>
+              </label>
+            </div>
           </div>
           <div class="response-actions">
             <label class="ghost small file-trigger">
@@ -399,6 +468,22 @@
             <div>
               <span>Assigned user</span>
               <strong>{{ viewRecord.assignedUserName || viewRecord.assignedUserEmail || '—' }}</strong>
+            </div>
+            <div>
+              <span>G&D summary</span>
+              <strong>{{ viewRecord.gdSummary || '—' }}</strong>
+            </div>
+            <div>
+              <span>Fishbone (6M)</span>
+              <strong>
+                Man: {{ viewRecord.fishboneData?.man || '—' }} | Machine: {{ viewRecord.fishboneData?.machine || '—' }} |
+                Method: {{ viewRecord.fishboneData?.method || '—' }} | Material: {{ viewRecord.fishboneData?.material || '—' }} |
+                Measurement: {{ viewRecord.fishboneData?.measurement || '—' }} | Environment: {{ viewRecord.fishboneData?.environment || '—' }}
+              </strong>
+            </div>
+            <div>
+              <span>Why-Why</span>
+              <strong>{{ (viewRecord.whyWhyData || []).join(' | ') || '—' }}</strong>
             </div>
           </div>
         </div>

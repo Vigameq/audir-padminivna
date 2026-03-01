@@ -136,127 +136,142 @@
         <div class="empty" *ngIf="!activeTemplate">
           No template found for this audit type.
         </div>
-        <ol class="question-list" *ngIf="activeTemplate">
-          <li class="question-card" *ngFor="let question of activeTemplate.questions; let i = index">
-            <div class="question-subsection" *ngIf="getSubsectionHeader(i)">
-              {{ getSubsectionHeader(i) }}
-            </div>
-            <div class="question-header">
-              <div>
-                <span class="question-index">Q{{ i + 1 }}</span>
-                <p class="question-text">{{ question }}</p>
-              </div>
-            </div>
-            <div class="question-body">
-              <div class="inline-fields">
-                <div class="field">
-                  <label>Select response</label>
-                  <select
-                    [(ngModel)]="responseSelections[i]"
-                    name="response-{{ i }}"
-                    (ngModelChange)="onResponseChange(i)"
-                  >
-                    <option value="">Select response</option>
-                    <option *ngFor="let option of responseOptions" [value]="option">
-                      {{ option }}
-                    </option>
-                  </select>
+        <div class="question-sections" *ngIf="activeTemplate">
+          <section class="question-section" *ngFor="let section of subsectionGroups; trackBy: trackBySubsectionKey">
+            <button
+              class="section-toggle"
+              type="button"
+              (click)="toggleSubsection(section.key)"
+              [attr.aria-expanded]="!isSubsectionCollapsed(section.key)"
+            >
+              <span class="section-title">{{ section.name }}</span>
+              <span class="section-meta">
+                {{ answeredCountInSubsection(section) }}/{{ section.questionIndexes.length }} answered
+              </span>
+              <span class="section-caret" [class.collapsed]="isSubsectionCollapsed(section.key)">▾</span>
+            </button>
+            <ol class="question-list" *ngIf="!isSubsectionCollapsed(section.key)">
+              <li class="question-card" *ngFor="let questionIndex of section.questionIndexes">
+                <div class="question-header">
+                  <div>
+                    <span class="question-index">Q{{ questionIndex + 1 }}</span>
+                    <p class="question-text">{{ questionLabel(questionIndex) }}</p>
+                  </div>
                 </div>
-                <div class="field">
-                  <label>Assign NC</label>
-                  <select
-                    [(ngModel)]="ncAssignments[i]"
-                    name="nc-{{ i }}"
-                    [disabled]="!isNegativeSelection(i)"
-                    (ngModelChange)="onNcChange(i)"
-                  >
-                    <option value="">Select department</option>
-                    <option *ngFor="let department of departments" [value]="department">
-                      {{ department }}
-                    </option>
-                  </select>
-                  <span class="field-error" *ngIf="ncErrors[i]">Assign NC is required.</span>
-                </div>
-              </div>
-              <div class="evidence-row">
-                <span>Attach evidence</span>
-                <div class="evidence-actions">
-                  <label class="ghost small file-trigger">
-                    Upload files
-                    <input
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.mp4,.webm,.mov,image/jpeg,image/png,video/mp4,video/webm,video/quicktime"
-                      multiple
-                      (change)="onEvidenceSelected(i, $event)"
-                    />
-                  </label>
-                </div>
-                <span class="evidence-name" *ngIf="evidenceFiles[i]">
-                  {{ evidenceFiles[i] }}
-                </span>
-                <span class="evidence-name" *ngIf="evidenceItems[i]?.length">
-                  {{ evidenceItems[i].length }} files attached
-                </span>
-                <div class="evidence-preview" *ngIf="evidenceItems[i]?.length">
-                  <article class="evidence-item" *ngFor="let item of evidenceItems[i]; let itemIndex = index">
-                    <img
-                      *ngIf="item.type.startsWith('image/')"
-                      [src]="item.dataUrl"
-                      [alt]="item.name"
-                      loading="lazy"
-                    />
-                    <video
-                      *ngIf="item.type.startsWith('video/')"
-                      [src]="item.dataUrl"
-                      controls
-                    ></video>
-                    <div class="evidence-item-meta">
-                      <span>{{ item.name }}</span>
-                      <button
-                        type="button"
-                        class="evidence-delete"
-                        (click)="onEvidenceDelete(i, itemIndex)"
-                        [disabled]="deletingEvidence[i + '-' + itemIndex]"
+                <div class="question-body">
+                  <div class="inline-fields">
+                    <div class="field">
+                      <label>Select response</label>
+                      <select
+                        [(ngModel)]="responseSelections[questionIndex]"
+                        name="response-{{ questionIndex }}"
+                        (ngModelChange)="onResponseChange(questionIndex)"
                       >
-                        {{ deletingEvidence[i + '-' + itemIndex] ? 'Deleting...' : 'Delete' }}
-                      </button>
+                        <option value="">Select response</option>
+                        <option *ngFor="let option of responseOptions" [value]="option">
+                          {{ option }}
+                        </option>
+                      </select>
                     </div>
-                  </article>
+                    <div class="field">
+                      <div class="field-header">
+                        <label>Assign NC</label>
+                        <span class="field-error" *ngIf="ncErrors[questionIndex]">Assign NC is required.</span>
+                      </div>
+                      <select
+                        [(ngModel)]="ncAssignments[questionIndex]"
+                        name="nc-{{ questionIndex }}"
+                        [disabled]="!isNegativeSelection(questionIndex)"
+                        (ngModelChange)="onNcChange(questionIndex)"
+                      >
+                        <option value="">Select department</option>
+                        <option *ngFor="let department of departments" [value]="department">
+                          {{ department }}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="evidence-row">
+                    <span>Attach evidence</span>
+                    <div class="evidence-actions">
+                      <label class="ghost small file-trigger">
+                        Upload files
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.mp4,.webm,.mov,image/jpeg,image/png,video/mp4,video/webm,video/quicktime"
+                          multiple
+                          (change)="onEvidenceSelected(questionIndex, $event)"
+                        />
+                      </label>
+                    </div>
+                    <span class="evidence-name" *ngIf="evidenceFiles[questionIndex]">
+                      {{ evidenceFiles[questionIndex] }}
+                    </span>
+                    <span class="evidence-name" *ngIf="evidenceItems[questionIndex]?.length">
+                      {{ evidenceItems[questionIndex].length }} files attached
+                    </span>
+                    <div class="evidence-preview" *ngIf="evidenceItems[questionIndex]?.length">
+                      <article class="evidence-item" *ngFor="let item of evidenceItems[questionIndex]; let itemIndex = index">
+                        <img
+                          *ngIf="item.type.startsWith('image/')"
+                          [src]="item.dataUrl"
+                          [alt]="item.name"
+                          loading="lazy"
+                        />
+                        <video
+                          *ngIf="item.type.startsWith('video/')"
+                          [src]="item.dataUrl"
+                          controls
+                        ></video>
+                        <div class="evidence-item-meta">
+                          <span>{{ item.name }}</span>
+                          <button
+                            type="button"
+                            class="evidence-delete"
+                            (click)="onEvidenceDelete(questionIndex, itemIndex)"
+                            [disabled]="deletingEvidence[questionIndex + '-' + itemIndex]"
+                          >
+                            {{ deletingEvidence[questionIndex + '-' + itemIndex] ? 'Deleting...' : 'Delete' }}
+                          </button>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                  <div class="note-row">
+                    <label>Auditor note</label>
+                    <textarea
+                      rows="3"
+                      maxlength="1000"
+                      placeholder="Add up to 1000 words"
+                      [(ngModel)]="noteEntries[questionIndex]"
+                      name="note-{{ questionIndex }}"
+                      (input)="noteWords[questionIndex] = countWords(noteEntries[questionIndex])"
+                    ></textarea>
+                    <span class="note-count">{{ noteWords[questionIndex] }}/1000 words</span>
+                  </div>
                 </div>
-              </div>
-              <div class="note-row">
-                <label>Auditor note</label>
-                <textarea
-                  rows="3"
-                  maxlength="1000"
-                  placeholder="Add up to 1000 words"
-                  [(ngModel)]="noteEntries[i]"
-                  name="note-{{ i }}"
-                  (input)="noteWords[i] = countWords(noteEntries[i])"
-                ></textarea>
-                <span class="note-count">{{ noteWords[i] }}/1000 words</span>
-              </div>
-            </div>
-            <div class="question-actions">
-              <button
-                class="ghost small"
-                type="button"
-                (click)="saveQuestion(i)"
-                [disabled]="!(responseSelections[i] || '').trim()"
-              >
-                {{ savedQuestions[i] ? 'Saved' : 'Save' }}
-              </button>
-            </div>
-          </li>
-        </ol>
+                <div class="question-actions">
+                  <button
+                    class="ghost small"
+                    type="button"
+                    (click)="saveQuestion(questionIndex)"
+                    [disabled]="!(responseSelections[questionIndex] || '').trim()"
+                  >
+                    {{ savedQuestions[questionIndex] ? 'Saved' : 'Save' }}
+                  </button>
+                </div>
+              </li>
+            </ol>
+          </section>
+        </div>
         <div class="submit-all">
           <button
             class="primary"
             type="button"
             (click)="submitAllQuestions()"
-            [disabled]="!areAllAssetsComplete()"
+            [disabled]="!canSubmitCurrentAsset()"
           >
-            Submit asset
+            Submit
           </button>
         </div>
       </section>

@@ -51,6 +51,20 @@
           NC Management
         </a>
         <a
+          routerLink="/complaints"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Complaints
+        </a>
+        <a
+          routerLink="/change-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Customer'"
+        >
+          Change Management
+        </a>
+        <a
           routerLink="/templates"
           routerLinkActive="active"
           *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"

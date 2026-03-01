@@ -143,6 +143,32 @@ const normalizeEvidenceKey = (raw: string): string => {
   return decodeURIComponent(key);
 };
 
+const sanitizeFishbone = (raw: unknown) => {
+  const payload =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  return {
+    man: String(payload.man ?? '').trim(),
+    machine: String(payload.machine ?? '').trim(),
+    method: String(payload.method ?? '').trim(),
+    material: String(payload.material ?? '').trim(),
+    measurement: String(payload.measurement ?? '').trim(),
+    environment: String(payload.environment ?? '').trim(),
+  };
+};
+
+const sanitizeWhyWhy = (raw: unknown) => {
+  if (!Array.isArray(raw)) {
+    return ['', '', '', '', ''];
+  }
+  const next = ['', '', '', '', ''];
+  raw.slice(0, 5).forEach((value, index) => {
+    next[index] = String(value ?? '').trim();
+  });
+  return next;
+};
+
 const jwtSecret = env.jwtSecret;
 const jwtExpiryMinutes = Number(env.accessTokenExpireMinutes);
 const smtpPort = Number(env.smtpPort);
@@ -571,6 +597,694 @@ const generateCode = () => {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 };
+
+const generateComplaintCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `CMP-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
+};
+
+const generateChangeCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `CHG-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
+};
+
+type ComplaintEscalationRule = {
+  level: number;
+  thresholdHours: number;
+  notifyRole: string;
+};
+
+const defaultComplaintEscalationRules = (complaintType: string): ComplaintEscalationRule[] => {
+  if (complaintType === 'Customer') {
+    return [
+      { level: 1, thresholdHours: 48, notifyRole: 'Manager' },
+      { level: 2, thresholdHours: 72, notifyRole: 'Manager' },
+      { level: 3, thresholdHours: 120, notifyRole: 'Manager' },
+    ];
+  }
+  return [
+    { level: 1, thresholdHours: 72, notifyRole: 'Manager' },
+    { level: 2, thresholdHours: 120, notifyRole: 'Manager' },
+    { level: 3, thresholdHours: 168, notifyRole: 'Manager' },
+  ];
+};
+
+const pickComplaintBaselineDate = (complaintDate: string | null | undefined, createdAt?: string) => {
+  if (complaintDate) {
+    const parsed = new Date(complaintDate);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  if (createdAt) {
+    const parsed = new Date(createdAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return new Date();
+};
+
+const calculateEscalationLevel = (elapsedHours: number, rules: ComplaintEscalationRule[]) => {
+  if (!rules.length) {
+    return 0;
+  }
+  return rules.reduce((level, rule) => (
+    elapsedHours >= rule.thresholdHours ? Math.max(level, rule.level) : level
+  ), 0);
+};
+
+const fetchComplaintEscalationRules = async (
+  tenantId: number,
+  complaintType: string,
+  category: string
+) => {
+  const { rows } = await pool.query(
+    `SELECT level, threshold_hours, notify_role
+     FROM complaint_escalation_rules
+     WHERE tenant_id = $1
+       AND complaint_type = $2
+       AND category = $3
+     ORDER BY level ASC`,
+    [tenantId, complaintType, category]
+  );
+  if (!rows.length) {
+    return defaultComplaintEscalationRules(complaintType);
+  }
+  return rows
+    .map((row) => ({
+      level: Number(row.level),
+      thresholdHours: Number(row.threshold_hours),
+      notifyRole: String(row.notify_role ?? 'Manager'),
+    }))
+    .filter((rule) => Number.isFinite(rule.level) && Number.isFinite(rule.thresholdHours) && rule.thresholdHours > 0);
+};
+
+const logComplaintEvent = async (payload: {
+  tenantId: number;
+  complaintId: number;
+  eventType: string;
+  message?: string;
+  oldData?: unknown;
+  newData?: unknown;
+  createdBy?: number | null;
+}) => {
+  await pool.query(
+    `INSERT INTO complaint_events
+      (tenant_id, complaint_id, event_type, message, old_data, new_data, created_by, created_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, NOW())`,
+    [
+      payload.tenantId,
+      payload.complaintId,
+      payload.eventType,
+      payload.message ?? null,
+      payload.oldData ? JSON.stringify(payload.oldData) : null,
+      payload.newData ? JSON.stringify(payload.newData) : null,
+      payload.createdBy ?? null,
+    ]
+  );
+};
+
+const getEscalationRecipients = async (payload: {
+  tenantId: number;
+  notifyRole?: string;
+  assignedTo?: string;
+}) => {
+  const role = String(payload.notifyRole ?? 'Manager').trim();
+  const { rows } = await pool.query(
+    `SELECT email
+     FROM users
+     WHERE tenant_id = $1
+       AND status = 'Active'
+       AND role = $2`,
+    [payload.tenantId, role]
+  );
+  const emails = new Set<string>();
+  rows.forEach((row) => {
+    const email = String(row.email ?? '').trim().toLowerCase();
+    if (email) {
+      emails.add(email);
+    }
+  });
+  const assigned = String(payload.assignedTo ?? '').trim().toLowerCase();
+  if (assigned.includes('@')) {
+    emails.add(assigned);
+  }
+  return Array.from(emails);
+};
+
+const sendComplaintEscalationEmail = async (payload: {
+  to: string[];
+  code: string;
+  title: string;
+  complaintType: string;
+  category: string;
+  status: string;
+  escalationLevel: number;
+  overdueHours: number;
+}) => {
+  if (!mailTransporter || !payload.to.length) {
+    return;
+  }
+  const lines = [
+    `Complaint ${payload.code} has escalated to Level ${payload.escalationLevel}.`,
+    '',
+    `Title: ${payload.title}`,
+    `Type/Category: ${payload.complaintType} / ${payload.category}`,
+    `Current status: ${payload.status}`,
+    `Overdue by: ${Math.max(payload.overdueHours, 0)} hour(s)`,
+    '',
+    'Please review and close as soon as possible.',
+  ];
+  await mailTransporter.sendMail({
+    from: env.smtpFrom,
+    to: payload.to.join(','),
+    subject: `[AuditX] Complaint escalation L${payload.escalationLevel} - ${payload.code}`,
+    text: lines.join('\n'),
+  });
+};
+
+const evaluateComplaintEscalations = async (tenantId?: number) => {
+  const params: unknown[] = [];
+  let whereClause = `WHERE status <> 'Closed'`;
+  if (tenantId) {
+    whereClause += ` AND tenant_id = $1`;
+    params.push(tenantId);
+  }
+  const { rows } = await pool.query(
+    `SELECT id, tenant_id, code, complaint_type, category, title, complaint_date, created_at,
+            status, assigned_to, target_close_at, escalation_level, escalation_status, closed_at
+     FROM complaints
+     ${whereClause}
+     ORDER BY created_at ASC`,
+    params
+  );
+  let escalatedCount = 0;
+  const now = new Date();
+  for (const complaint of rows) {
+    const currentTenantId = Number(complaint.tenant_id);
+    const complaintId = Number(complaint.id);
+    if (!currentTenantId || !complaintId) {
+      continue;
+    }
+    const complaintType = String(complaint.complaint_type ?? 'Internal');
+    const category = String(complaint.category ?? 'Inprocess');
+    const rules = await fetchComplaintEscalationRules(currentTenantId, complaintType, category);
+    if (!rules.length) {
+      continue;
+    }
+    const baseline = pickComplaintBaselineDate(
+      complaint.complaint_date ? String(complaint.complaint_date) : null,
+      complaint.created_at ? String(complaint.created_at) : undefined
+    );
+    const elapsedHours = Math.max(0, Math.floor((now.getTime() - baseline.getTime()) / (1000 * 60 * 60)));
+    const nextLevel = calculateEscalationLevel(elapsedHours, rules);
+    const currentLevel = Number(complaint.escalation_level ?? 0);
+    const targetHours = Math.min(...rules.map((rule) => rule.thresholdHours));
+    const targetCloseAt = new Date(baseline.getTime() + targetHours * 60 * 60 * 1000);
+    if (!complaint.target_close_at) {
+      await pool.query(
+        `UPDATE complaints
+         SET target_close_at = $1, updated_at = NOW()
+         WHERE id = $2 AND tenant_id = $3`,
+        [targetCloseAt.toISOString(), complaintId, currentTenantId]
+      );
+    }
+    if (nextLevel <= currentLevel) {
+      continue;
+    }
+    const matchedRule =
+      rules.find((rule) => rule.level === nextLevel) ??
+      rules[rules.length - 1];
+    const escalationStatus = nextLevel >= rules[rules.length - 1].level ? 'Final' : 'Escalated';
+    await pool.query(
+      `UPDATE complaints
+       SET escalation_level = $1,
+           escalation_status = $2,
+           escalation_owner = $3,
+           last_escalated_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $4 AND tenant_id = $5`,
+      [nextLevel, escalationStatus, matchedRule.notifyRole, complaintId, currentTenantId]
+    );
+    await logComplaintEvent({
+      tenantId: currentTenantId,
+      complaintId,
+      eventType: 'Escalated',
+      message: `Escalated to level ${nextLevel} (${matchedRule.notifyRole})`,
+      oldData: { escalation_level: currentLevel },
+      newData: { escalation_level: nextLevel, escalation_status: escalationStatus, escalation_owner: matchedRule.notifyRole },
+      createdBy: null,
+    });
+    try {
+      const recipients = await getEscalationRecipients({
+        tenantId: currentTenantId,
+        notifyRole: matchedRule.notifyRole,
+        assignedTo: complaint.assigned_to ? String(complaint.assigned_to) : '',
+      });
+      await sendComplaintEscalationEmail({
+        to: recipients,
+        code: String(complaint.code ?? ''),
+        title: String(complaint.title ?? ''),
+        complaintType,
+        category,
+        status: String(complaint.status ?? 'Open'),
+        escalationLevel: nextLevel,
+        overdueHours: Math.max(0, elapsedHours - matchedRule.thresholdHours),
+      });
+    } catch (error) {
+      functions.logger.error('Failed to send complaint escalation email', {
+        complaintId,
+        tenantId: currentTenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    escalatedCount += 1;
+  }
+  return { scanned: rows.length, escalated: escalatedCount };
+};
+
+router.get('/complaints', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, code, complaint_type, category, title, description, source_name, reported_by,
+            complaint_date, status, assigned_to, resolution, target_close_at, escalation_level,
+            escalation_status, last_escalated_at, escalation_owner, closed_at, created_at, updated_at
+     FROM complaints
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/complaints', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const complaintType = String(payload.complaint_type ?? '').trim();
+  const category = String(payload.category ?? '').trim();
+  const title = String(payload.title ?? '').trim();
+  if (!title) {
+    return res.status(400).json({ detail: 'Title is required' });
+  }
+  if (!['Customer', 'Internal'].includes(complaintType)) {
+    return res.status(400).json({ detail: 'Invalid complaint_type' });
+  }
+  if (!['Inprocess', 'Supplier'].includes(category)) {
+    return res.status(400).json({ detail: 'Invalid category' });
+  }
+
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = generateComplaintCode();
+    const exists = await pool.query(
+      'SELECT 1 FROM complaints WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+      [req.user?.tenant_id, code]
+    );
+    if (!exists.rows.length) {
+      break;
+    }
+    code = '';
+  }
+  if (!code) {
+    return res.status(500).json({ detail: 'Unable to generate complaint code' });
+  }
+
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const rules = await fetchComplaintEscalationRules(tenantId, complaintType, category);
+  const baseline = pickComplaintBaselineDate(payload.complaint_date ?? null);
+  const firstThreshold = rules.length
+    ? Math.min(...rules.map((rule) => rule.thresholdHours))
+    : 48;
+  const targetCloseAt = new Date(baseline.getTime() + firstThreshold * 60 * 60 * 1000);
+
+  const { rows } = await pool.query(
+    `INSERT INTO complaints
+      (tenant_id, code, complaint_type, category, title, description, source_name, reported_by,
+       complaint_date, status, assigned_to, resolution, target_close_at, escalation_level,
+       escalation_status, escalation_owner, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Open', $10, NULL, $11, 0, 'None', NULL, $12, NOW(), NOW())
+     RETURNING id, code, complaint_type, category, title, description, source_name, reported_by,
+               complaint_date, status, assigned_to, resolution, target_close_at, escalation_level,
+               escalation_status, last_escalated_at, escalation_owner, closed_at, created_at, updated_at`,
+    [
+      tenantId,
+      code,
+      complaintType,
+      category,
+      title,
+      payload.description ?? null,
+      payload.source_name ?? null,
+      payload.reported_by ?? null,
+      payload.complaint_date ?? null,
+      payload.assigned_to ?? null,
+      targetCloseAt.toISOString(),
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  await logComplaintEvent({
+    tenantId,
+    complaintId: Number(rows[0]?.id ?? 0),
+    eventType: 'Created',
+    message: `Complaint ${code} created`,
+    newData: rows[0],
+    createdBy: Number(req.user?.sub ?? 0) || null,
+  });
+  await evaluateComplaintEscalations(tenantId);
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/complaints/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid complaint id' });
+  }
+  const payload = req.body ?? {};
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const currentQuery = await pool.query(
+    `SELECT id, code, complaint_type, category, title, description, source_name, reported_by,
+            complaint_date, status, assigned_to, resolution, target_close_at, escalation_level,
+            escalation_status, last_escalated_at, escalation_owner, closed_at, created_at, updated_at
+     FROM complaints
+     WHERE id = $1 AND tenant_id = $2`,
+    [id, tenantId]
+  );
+  const current = currentQuery.rows[0];
+  if (!current) {
+    return res.status(404).json({ detail: 'Complaint not found' });
+  }
+  const fields = ([
+    ['complaint_type', payload.complaint_type],
+    ['category', payload.category],
+    ['title', payload.title],
+    ['description', payload.description],
+    ['source_name', payload.source_name],
+    ['reported_by', payload.reported_by],
+    ['complaint_date', payload.complaint_date],
+    ['status', payload.status],
+    ['assigned_to', payload.assigned_to],
+    ['resolution', payload.resolution],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+
+  const complaintType = fields.find(([field]) => field === 'complaint_type')?.[1];
+  const category = fields.find(([field]) => field === 'category')?.[1];
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  if (complaintType !== undefined && !['Customer', 'Internal'].includes(String(complaintType))) {
+    return res.status(400).json({ detail: 'Invalid complaint_type' });
+  }
+  if (category !== undefined && !['Inprocess', 'Supplier'].includes(String(category))) {
+    return res.status(400).json({ detail: 'Invalid category' });
+  }
+  if (status !== undefined && !['Open', 'In Progress', 'Closed'].includes(String(status))) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  const normalizedStatus = status !== undefined ? String(status) : String(current.status ?? 'Open');
+  if (status !== undefined) {
+    fields.push(['closed_at', normalizedStatus === 'Closed' ? new Date().toISOString() : null]);
+    if (normalizedStatus === 'Closed') {
+      fields.push(['escalation_status', 'Closed']);
+    } else if (String(current.escalation_status ?? '') === 'Closed') {
+      fields.push(['escalation_status', 'None']);
+    }
+  }
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE complaints
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, code, complaint_type, category, title, description, source_name, reported_by,
+               complaint_date, status, assigned_to, resolution, target_close_at, escalation_level,
+               escalation_status, last_escalated_at, escalation_owner, closed_at, created_at, updated_at`,
+    [...values, id, tenantId]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Complaint not found' });
+  }
+  const updated = rows[0];
+  await logComplaintEvent({
+    tenantId,
+    complaintId: id,
+    eventType: 'Updated',
+    message: `Complaint ${current.code ?? ''} updated`,
+    oldData: current,
+    newData: updated,
+    createdBy: Number(req.user?.sub ?? 0) || null,
+  });
+  if (String(updated.status ?? '') !== 'Closed') {
+    await evaluateComplaintEscalations(tenantId);
+  }
+  return res.json(updated);
+});
+
+router.post('/complaints/escalations/run', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const role = String(req.user?.role ?? '').trim().toLowerCase();
+  if (role !== 'manager' && role !== 'admin') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const result = await evaluateComplaintEscalations(tenantId);
+  return res.json({ detail: 'Escalation run complete', ...result });
+});
+
+router.get('/complaints/escalation-rules', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const { rows } = await pool.query(
+    `SELECT id, complaint_type, category, level, threshold_hours, notify_role, created_at, updated_at
+     FROM complaint_escalation_rules
+     WHERE tenant_id = $1
+     ORDER BY complaint_type ASC, category ASC, level ASC`,
+    [tenantId]
+  );
+  return res.json(rows);
+});
+
+router.put('/complaints/escalation-rules/:id', requireAuth, async (req: AuthedRequest, res) => {
+  const role = String(req.user?.role ?? '').trim().toLowerCase();
+  if (role !== 'super admin' && role !== 'admin') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const ruleId = Number(req.params.id);
+  if (!ruleId) {
+    return res.status(400).json({ detail: 'Invalid rule id' });
+  }
+  const payload = req.body ?? {};
+  const thresholdHours = Number(payload.threshold_hours);
+  const notifyRole = String(payload.notify_role ?? '').trim();
+  if (!Number.isFinite(thresholdHours) || thresholdHours <= 0) {
+    return res.status(400).json({ detail: 'Invalid threshold_hours' });
+  }
+  if (!notifyRole) {
+    return res.status(400).json({ detail: 'notify_role is required' });
+  }
+  const allowedRoles = new Set(['Super Admin', 'Admin', 'Manager', 'Auditor']);
+  if (!allowedRoles.has(notifyRole)) {
+    return res.status(400).json({ detail: 'Invalid notify_role' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const { rows } = await pool.query(
+    `UPDATE complaint_escalation_rules
+     SET threshold_hours = $1,
+         notify_role = $2,
+         updated_at = NOW()
+     WHERE id = $3 AND tenant_id = $4
+     RETURNING id, complaint_type, category, level, threshold_hours, notify_role, created_at, updated_at`,
+    [Math.floor(thresholdHours), notifyRole, ruleId, tenantId]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Rule not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/changes', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, code, request_type, title, description, four_m_category, change_reason,
+            impact_assessment, risk_level, status, requested_by, requested_date, target_date,
+            approved_by, approved_at, implemented_at, created_at, updated_at
+     FROM change_requests
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/changes', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const requestType = String(payload.request_type ?? '').trim();
+  const fourMCategory = String(payload.four_m_category ?? '').trim();
+  const title = String(payload.title ?? '').trim();
+  if (!title) {
+    return res.status(400).json({ detail: 'Title is required' });
+  }
+  if (!['ECR', 'ECN'].includes(requestType)) {
+    return res.status(400).json({ detail: 'Invalid request_type' });
+  }
+  if (!['Man', 'Machine', 'Method', 'Material'].includes(fourMCategory)) {
+    return res.status(400).json({ detail: 'Invalid four_m_category' });
+  }
+  const riskLevel = String(payload.risk_level ?? 'Medium').trim();
+  const status = String(payload.status ?? 'Open').trim();
+  if (!['Low', 'Medium', 'High', 'Critical'].includes(riskLevel)) {
+    return res.status(400).json({ detail: 'Invalid risk_level' });
+  }
+  if (!['Draft', 'Open', 'In Review', 'Approved', 'Implemented', 'Rejected', 'Closed'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = generateChangeCode();
+    const exists = await pool.query(
+      'SELECT 1 FROM change_requests WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+      [req.user?.tenant_id, code]
+    );
+    if (!exists.rows.length) {
+      break;
+    }
+    code = '';
+  }
+  if (!code) {
+    return res.status(500).json({ detail: 'Unable to generate change code' });
+  }
+
+  const approvedAt = status === 'Approved' ? new Date().toISOString() : null;
+  const implementedAt = status === 'Implemented' ? new Date().toISOString() : null;
+  const { rows } = await pool.query(
+    `INSERT INTO change_requests
+      (tenant_id, code, request_type, title, description, four_m_category, change_reason,
+       impact_assessment, risk_level, status, requested_by, requested_date, target_date,
+       approved_by, approved_at, implemented_at, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
+     RETURNING id, code, request_type, title, description, four_m_category, change_reason,
+               impact_assessment, risk_level, status, requested_by, requested_date, target_date,
+               approved_by, approved_at, implemented_at, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      code,
+      requestType,
+      title,
+      payload.description ?? null,
+      fourMCategory,
+      payload.change_reason ?? null,
+      payload.impact_assessment ?? null,
+      riskLevel,
+      status,
+      payload.requested_by ?? null,
+      payload.requested_date ?? null,
+      payload.target_date ?? null,
+      payload.approved_by ?? null,
+      approvedAt,
+      implementedAt,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/changes/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid change id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['request_type', payload.request_type],
+    ['title', payload.title],
+    ['description', payload.description],
+    ['four_m_category', payload.four_m_category],
+    ['change_reason', payload.change_reason],
+    ['impact_assessment', payload.impact_assessment],
+    ['risk_level', payload.risk_level],
+    ['status', payload.status],
+    ['requested_by', payload.requested_by],
+    ['requested_date', payload.requested_date],
+    ['target_date', payload.target_date],
+    ['approved_by', payload.approved_by],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+
+  const requestType = fields.find(([field]) => field === 'request_type')?.[1];
+  const fourMCategory = fields.find(([field]) => field === 'four_m_category')?.[1];
+  const riskLevel = fields.find(([field]) => field === 'risk_level')?.[1];
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  if (requestType !== undefined && !['ECR', 'ECN'].includes(String(requestType))) {
+    return res.status(400).json({ detail: 'Invalid request_type' });
+  }
+  if (fourMCategory !== undefined && !['Man', 'Machine', 'Method', 'Material'].includes(String(fourMCategory))) {
+    return res.status(400).json({ detail: 'Invalid four_m_category' });
+  }
+  if (riskLevel !== undefined && !['Low', 'Medium', 'High', 'Critical'].includes(String(riskLevel))) {
+    return res.status(400).json({ detail: 'Invalid risk_level' });
+  }
+  if (
+    status !== undefined &&
+    !['Draft', 'Open', 'In Review', 'Approved', 'Implemented', 'Rejected', 'Closed'].includes(String(status))
+  ) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  const nextStatus = status !== undefined ? String(status) : '';
+  if (nextStatus === 'Approved') {
+    fields.push(['approved_at', new Date().toISOString()]);
+  }
+  if (nextStatus === 'Implemented') {
+    fields.push(['implemented_at', new Date().toISOString()]);
+  }
+  if (nextStatus && nextStatus !== 'Approved') {
+    fields.push(['approved_at', null]);
+  }
+  if (nextStatus && nextStatus !== 'Implemented') {
+    fields.push(['implemented_at', null]);
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE change_requests
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, code, request_type, title, description, four_m_category, change_reason,
+               impact_assessment, risk_level, status, requested_by, requested_date, target_date,
+               approved_by, approved_at, implemented_at, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Change request not found' });
+  }
+  return res.json(rows[0]);
+});
 
 router.post('/audit-plans', requireAuth, async (req: AuthedRequest, res) => {
   if (req.user?.role === 'Customer') {
@@ -1004,6 +1718,9 @@ router.get('/nc-records', requireAuth, async (req: AuthedRequest, res) => {
             n.corrective_action,
             n.preventive_action,
             n.evidence_name,
+            n.gd_summary,
+            n.fishbone_data,
+            n.why_why_data,
             n.assigned_user_id,
             u.first_name AS assigned_user_first_name,
             u.last_name AS assigned_user_last_name,
@@ -1033,6 +1750,9 @@ router.post('/nc-actions', requireAuth, async (req: AuthedRequest, res) => {
     return res.status(400).json({ detail: 'Missing answer id' });
   }
   const requestedStatus = String(payload.status ?? 'In Progress');
+  const gdSummary = String(payload.gd_summary ?? '').trim();
+  const fishboneData = sanitizeFishbone(payload.fishbone_data);
+  const whyWhyData = sanitizeWhyWhy(payload.why_why_data);
   const assignedUserId =
     payload.assigned_user_id !== undefined && payload.assigned_user_id !== null
       ? Number(payload.assigned_user_id)
@@ -1086,8 +1806,9 @@ router.post('/nc-actions', requireAuth, async (req: AuthedRequest, res) => {
   const { rows } = await pool.query(
     `INSERT INTO nc_actions
       (tenant_id, audit_answer_id, root_cause, containment_action, corrective_action,
-       preventive_action, evidence_name, assigned_user_id, status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+       preventive_action, evidence_name, gd_summary, fishbone_data, why_why_data,
+       assigned_user_id, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, NOW(), NOW())
      ON CONFLICT (tenant_id, audit_answer_id)
      DO UPDATE SET
        root_cause = EXCLUDED.root_cause,
@@ -1095,11 +1816,15 @@ router.post('/nc-actions', requireAuth, async (req: AuthedRequest, res) => {
        corrective_action = EXCLUDED.corrective_action,
        preventive_action = EXCLUDED.preventive_action,
        evidence_name = EXCLUDED.evidence_name,
+       gd_summary = EXCLUDED.gd_summary,
+       fishbone_data = EXCLUDED.fishbone_data,
+       why_why_data = EXCLUDED.why_why_data,
        assigned_user_id = EXCLUDED.assigned_user_id,
        status = EXCLUDED.status,
        updated_at = NOW()
      RETURNING id, audit_answer_id, root_cause, containment_action, corrective_action,
-               preventive_action, evidence_name, assigned_user_id, status, created_at, updated_at`,
+               preventive_action, evidence_name, gd_summary, fishbone_data, why_why_data,
+               assigned_user_id, status, created_at, updated_at`,
     [
       req.user?.tenant_id,
       answerId,
@@ -1108,6 +1833,9 @@ router.post('/nc-actions', requireAuth, async (req: AuthedRequest, res) => {
       payload.corrective_action ?? null,
       payload.preventive_action ?? null,
       payload.evidence_name ?? null,
+      gdSummary || null,
+      JSON.stringify(fishboneData),
+      JSON.stringify(whyWhyData),
       assignedUserId,
       requestedStatus,
     ]
@@ -1119,3 +1847,13 @@ app.use('/', router);
 app.use('/api', router);
 
 export const api = functions.region('asia-south1').https.onRequest(app);
+
+export const complaintEscalationScheduler = functions
+  .region('asia-south1')
+  .pubsub.schedule('every 30 minutes')
+  .timeZone('Asia/Kolkata')
+  .onRun(async () => {
+    const result = await evaluateComplaintEscalations();
+    functions.logger.info('Complaint escalation scheduler run', result);
+    return null;
+  });

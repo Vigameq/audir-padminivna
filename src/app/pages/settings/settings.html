@@ -32,6 +32,59 @@
       </div>
     </article>
 
+    <article class="settings-card wide">
+      <h2>Complaint Escalation Rules</h2>
+      <p>Configure escalation thresholds and notification roles without SQL changes.</p>
+      <div class="rule-list" *ngIf="escalationRules.length; else noEscalationRules">
+        <div class="rule-row rule-head">
+          <span>Type</span>
+          <span>Category</span>
+          <span>Level</span>
+          <span>Threshold (hours)</span>
+          <span>Notify role</span>
+          <span>Action</span>
+        </div>
+        <div class="rule-row" *ngFor="let rule of escalationRules">
+          <span>{{ rule.complaintType }}</span>
+          <span>{{ rule.category }}</span>
+          <span>L{{ rule.level }}</span>
+          <input
+            type="number"
+            min="1"
+            [ngModel]="getEscalationRuleDraft(rule).thresholdHours"
+            (ngModelChange)="updateEscalationThreshold(rule.id, $event)"
+            [ngModelOptions]="{ standalone: true }"
+          />
+          <select
+            [ngModel]="getEscalationRuleDraft(rule).notifyRole"
+            (ngModelChange)="updateEscalationRole(rule.id, $event)"
+            [ngModelOptions]="{ standalone: true }"
+          >
+            <option *ngFor="let role of escalationRoleOptions" [value]="role">{{ role }}</option>
+          </select>
+          <div class="rule-actions">
+            <button class="primary small" type="button" (click)="saveEscalationRule(rule)">
+              Save
+            </button>
+            <span class="rule-state" [class.error]="escalationSaveState[rule.id] === 'error'">
+              {{
+                escalationSaveState[rule.id] === 'saving'
+                  ? 'Saving...'
+                  : escalationSaveState[rule.id] === 'saved'
+                    ? 'Saved'
+                    : escalationSaveState[rule.id] === 'error'
+                      ? 'Error'
+                      : ''
+              }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <ng-template #noEscalationRules>
+        <p class="empty">No escalation rules found. Run the latest migration first.</p>
+      </ng-template>
+    </article>
+
     <article class="settings-card">
       <h2>Sites</h2>
       <p>Define site names used across audit plans.</p>

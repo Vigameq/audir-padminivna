@@ -11,6 +11,8 @@ import { DepartmentService } from '../../services/department.service';
 import { ResponseService } from '../../services/response.service';
 import { TemplateRecord, TemplateService } from '../../services/template.service';
 
+type PerformSubsectionGroup = { key: string; name: string; questionIndexes: number[] };
+
 @Component({
   selector: 'app-audit-perform',
   imports: [CommonModule, FormsModule],
@@ -89,7 +91,8 @@ export class AuditPerform implements OnInit {
   protected ncErrors: boolean[] = [];
   protected noteHover: string | null = null;
   protected isQrGenerating: Record<string, boolean> = {};
-  protected subsectionHeaderByQuestion: Record<number, string> = {};
+  protected subsectionGroups: PerformSubsectionGroup[] = [];
+  protected collapsedSubsections: Record<string, boolean> = {};
   private completedAuditCodes = new Set<string>();
 
   protected get totalQuestions(): number {
@@ -150,7 +153,8 @@ export class AuditPerform implements OnInit {
     this.activeAudit = audit;
     this.router.navigate(['/audit-perform', audit.code], { replaceUrl: true });
     this.activeTemplate = this.resolveTemplateForAudit(audit);
-    this.subsectionHeaderByQuestion = this.buildSubsectionHeaderMap(this.activeTemplate);
+    this.subsectionGroups = this.buildSubsectionGroups(this.activeTemplate);
+    this.initializeSubsectionState();
     const response = this.responseService
       .responses()
       .find((item) => item.name === audit.responseType);
@@ -200,7 +204,8 @@ export class AuditPerform implements OnInit {
     this.evidenceDataUrlsByAsset = {};
     this.evidenceItemsByAsset = {};
     this.ncErrors = [];
-    this.subsectionHeaderByQuestion = {};
+    this.subsectionGroups = [];
+    this.collapsedSubsections = {};
     this.router.navigate(['/audit-perform'], { replaceUrl: true });
   }
 
@@ -355,6 +360,29 @@ export class AuditPerform implements OnInit {
     }
     const assets = this.assetScope.length ? this.assetScope : ['1'];
     return assets.every((asset) => this.isAssetComplete(asset));
+  }
+
+  protected canSubmitCurrentAsset(): boolean {
+    if (!this.activeTemplate) {
+      return false;
+    }
+    const totalQuestions = this.activeTemplate.questions.length;
+    if (totalQuestions === 0) {
+      return false;
+    }
+    const hasAllAnswers =
+      this.responseSelections.length === totalQuestions &&
+      this.responseSelections.every((response) => !!response?.trim());
+    if (!hasAllAnswers) {
+      return false;
+    }
+    return !this.responseSelections.some((response, index) => {
+      const isNegative = !!response && this.negativeResponseOptions.includes(response);
+      if (!isNegative) {
+        return false;
+      }
+      return !this.ncAssignments[index]?.trim();
+    });
   }
 
   protected setActiveAsset(asset: string): void {
@@ -568,30 +596,62 @@ export class AuditPerform implements OnInit {
     );
   }
 
-  private buildSubsectionHeaderMap(template: TemplateRecord | null): Record<number, string> {
-    if (!template?.subsections?.length) {
-      return {};
+  private buildSubsectionGroups(template: TemplateRecord | null): PerformSubsectionGroup[] {
+    if (!template?.questions?.length) {
+      return [];
     }
-    const headers: Record<number, string> = {};
-    template.subsections.forEach((section) => {
+    const groups: PerformSubsectionGroup[] = [];
+    const used = new Set<number>();
+
+    (template.subsections ?? []).forEach((section, sectionIndex) => {
       const name = String(section?.name ?? '').trim();
-      const indices = Array.isArray(section?.questionIndices)
-        ? section.questionIndices
-            .map((index) => Number(index))
-            .filter(
-              (index) =>
-                Number.isInteger(index) &&
-                index >= 0 &&
-                index < template.questions.length
-            )
-            .sort((a, b) => a - b)
-        : [];
-      if (!name || !indices.length) {
+      const rawIndices = Array.isArray(section?.questionIndices) ? section.questionIndices : [];
+      const questionIndexes = rawIndices
+        .map((index) => Number(index))
+        .filter(
+          (index) =>
+            Number.isInteger(index) &&
+            index >= 0 &&
+            index < template.questions.length &&
+            !used.has(index)
+        );
+      if (!name || !questionIndexes.length) {
         return;
       }
-      headers[indices[0]] = name;
+      questionIndexes.forEach((index) => used.add(index));
+      groups.push({
+        key: section?.id || `subsection-${sectionIndex + 1}`,
+        name,
+        questionIndexes,
+      });
     });
-    return headers;
+
+    const ungrouped = template.questions
+      .map((_question, index) => index)
+      .filter((index) => !used.has(index));
+    if (ungrouped.length) {
+      groups.push({
+        key: 'subsection-general',
+        name: 'General',
+        questionIndexes: ungrouped,
+      });
+    }
+    if (!groups.length) {
+      groups.push({
+        key: 'subsection-all',
+        name: 'All questions',
+        questionIndexes: template.questions.map((_question, index) => index),
+      });
+    }
+    return groups;
+  }
+
+  private initializeSubsectionState(): void {
+    const next: Record<string, boolean> = {};
+    this.subsectionGroups.forEach((group, index) => {
+      next[group.key] = index !== 0;
+    });
+    this.collapsedSubsections = next;
   }
 
   private ensureAssetState(asset: string): void {
@@ -808,8 +868,29 @@ export class AuditPerform implements OnInit {
     return this.isAssignedToCurrentUser(audit);
   }
 
-  protected getSubsectionHeader(index: number): string {
-    return this.subsectionHeaderByQuestion[index] ?? '';
+  protected toggleSubsection(sectionKey: string): void {
+    this.collapsedSubsections = {
+      ...this.collapsedSubsections,
+      [sectionKey]: !this.collapsedSubsections[sectionKey],
+    };
+  }
+
+  protected isSubsectionCollapsed(sectionKey: string): boolean {
+    return !!this.collapsedSubsections[sectionKey];
+  }
+
+  protected answeredCountInSubsection(section: PerformSubsectionGroup): number {
+    return section.questionIndexes.filter(
+      (index) => !!(this.responseSelections[index] || '').trim()
+    ).length;
+  }
+
+  protected trackBySubsectionKey(_index: number, section: PerformSubsectionGroup): string {
+    return section.key;
+  }
+
+  protected questionLabel(index: number): string {
+    return this.activeTemplate?.questions[index] ?? '';
   }
 
   protected async onEvidenceSelected(index: number, event: Event): Promise<void> {

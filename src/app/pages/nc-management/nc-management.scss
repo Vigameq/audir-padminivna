@@ -141,6 +141,11 @@
   color: var(--color-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  min-width: 7rem;
 }
 
 .status-pill.high {
@@ -159,7 +164,8 @@
 }
 
 .nc-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -169,6 +175,7 @@
   display: grid;
   gap: 0.25rem;
   min-width: 0;
+  align-content: center;
 }
 
 .nc-title {
@@ -200,9 +207,23 @@
   justify-content: flex-end;
 }
 
-.nc-inline .assignee-select {
-  width: 200px;
-  min-width: 200px;
+.nc-inline.flagged-actions {
+  display: grid;
+  grid-template-columns: 7rem 15.5rem 5.6rem 15.5rem 8.1rem;
+  align-items: center;
+  justify-content: end;
+  gap: 0.6rem;
+  flex-wrap: nowrap;
+}
+
+.nc-inline.simple-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nc-inline.flagged-actions .assignee-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .empty {
@@ -226,12 +247,13 @@
 
 .assignee-select {
   font: inherit;
-  padding: 0.4rem 0.7rem;
+  padding: 0 0.7rem;
   border-radius: 0.65rem;
   border: 1px solid rgba(20, 10, 0, 0.15);
   background: var(--color-surface);
   color: var(--color-ink);
   min-width: 150px;
+  height: 2.5rem;
 }
 
 .nc-actions {
@@ -260,8 +282,11 @@ button.ghost {
 }
 
 button.small {
-  padding: 0.35rem 0.85rem;
+  padding: 0 0.85rem;
   font-size: 0.8rem;
+  min-height: 2.25rem;
+  height: 2.25rem;
+  white-space: nowrap;
 }
 
 button:disabled {
@@ -342,13 +367,129 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.response-grid textarea {
+.response-grid label.full {
+  grid-column: 1 / -1;
+}
+
+.response-grid textarea,
+.analysis-grid textarea,
+.why-grid textarea {
   font: inherit;
   padding: 0.7rem 0.9rem;
   border-radius: 0.85rem;
   border: 1px solid rgba(20, 10, 0, 0.15);
   background: var(--color-surface);
   resize: vertical;
+}
+
+.analysis-section {
+  border: 1px solid rgba(20, 10, 0, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.analysis-section h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.analysis-grid label,
+.why-grid label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+}
+
+.fishbone-canvas {
+  position: relative;
+  min-height: 560px;
+  border: 1px solid rgba(20, 10, 0, 0.1);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(252, 248, 240, 0.92));
+  overflow: hidden;
+}
+
+.fishbone-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.fishbone-svg .spine,
+.fishbone-svg .bone {
+  stroke: rgba(35, 35, 35, 0.75);
+  stroke-width: 2;
+}
+
+.fishbone-svg .head {
+  fill: rgba(35, 35, 35, 0.75);
+}
+
+.bone-input {
+  position: absolute;
+  width: min(23vw, 210px);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.bone-input span,
+.effect-box span {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.bone-input.top {
+  top: 1rem;
+}
+
+.bone-input.bottom {
+  bottom: 1rem;
+}
+
+.bone-input.man {
+  left: 1.25rem;
+}
+
+.bone-input.machine {
+  left: 17.5rem;
+}
+
+.bone-input.method {
+  left: 33.75rem;
+}
+
+.bone-input.material {
+  left: 1.25rem;
+}
+
+.bone-input.measurement {
+  left: 17.5rem;
+}
+
+.bone-input.environment {
+  left: 33.75rem;
+}
+
+.effect-box {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(24vw, 220px);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.why-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0.75rem;
 }
 
 .response-actions {
@@ -437,5 +578,44 @@ button:disabled {
   .nc-card-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .analysis-grid,
+  .why-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nc-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .nc-inline.flagged-actions {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .nc-inline.simple-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .fishbone-canvas {
+    min-height: 0;
+    padding: 0.85rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .fishbone-svg {
+    display: none;
+  }
+
+  .bone-input,
+  .effect-box {
+    position: static;
+    width: 100%;
+    transform: none;
   }
 }

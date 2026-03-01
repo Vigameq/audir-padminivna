@@ -259,6 +259,7 @@ button:disabled,
   gap: 1rem;
   overflow: auto;
   min-height: 0;
+  align-content: start;
 }
 
 .drawer-content h3 {
@@ -273,6 +274,55 @@ button:disabled,
   color: var(--color-muted);
   font-size: 0.95rem;
   list-style: none;
+}
+
+.question-sections {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.question-section {
+  border: 1px solid rgba(20, 10, 0, 0.08);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.section-toggle {
+  width: 100%;
+  border: 1px solid rgba(255, 154, 0, 0.28);
+  background: rgba(255, 154, 0, 0.08);
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  min-height: 0;
+}
+
+.section-title {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.section-meta {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+}
+
+.section-caret {
+  font-size: 0.95rem;
+  color: var(--color-muted);
+  transition: transform 0.2s ease;
+}
+
+.section-caret.collapsed {
+  transform: rotate(-90deg);
 }
 
 .drawer-meta {
@@ -441,11 +491,25 @@ button:disabled,
   gap: 0.3rem;
   font-size: 0.8rem;
   color: var(--color-muted);
+  align-content: start;
+}
+
+.inline-fields .field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  min-height: 1.2rem;
+}
+
+.inline-fields .field-header label {
+  margin: 0;
 }
 
 .inline-fields .field-error {
   font-size: 0.75rem;
-  color: var(--color-accent);
+  color: #b42318;
+  white-space: nowrap;
 }
 
 .inline-fields select {
@@ -619,7 +683,14 @@ button:disabled,
 .submit-all {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   padding-top: 1rem;
+}
+
+.submit-all .primary {
+  height: auto;
+  min-height: 0;
+  padding: 0.6rem 1.3rem;
 }
 
 @media (max-width: 720px) {
@@ -640,6 +711,15 @@ button:disabled,
 
   .inline-fields {
     grid-template-columns: 1fr;
+  }
+
+  .inline-fields .field-header {
+    flex-wrap: wrap;
+    min-height: 0;
+  }
+
+  .inline-fields .field-error {
+    white-space: normal;
   }
 
   .audit-row {

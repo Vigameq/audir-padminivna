@@ -1,0 +1,167 @@
+<section class="change-management">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Governance</p>
+      <h1>Change management</h1>
+      <p class="subtitle">Track ECR/ECN requests with 4M change control across lifecycle stages.</p>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>New change request</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Request type
+        <select [(ngModel)]="createForm.requestType" name="requestType">
+          <option *ngFor="let option of typeOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        4M category
+        <select [(ngModel)]="createForm.fourMCategory" name="fourMCategory">
+          <option *ngFor="let option of fourMOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Risk level
+        <select [(ngModel)]="createForm.riskLevel" name="riskLevel">
+          <option *ngFor="let option of riskOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Initial status
+        <select [(ngModel)]="createForm.status" name="status">
+          <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label class="full">
+        Title
+        <input type="text" [(ngModel)]="createForm.title" name="title" placeholder="Change title" />
+      </label>
+      <label class="full">
+        Description
+        <textarea rows="2" [(ngModel)]="createForm.description" name="description" placeholder="Current issue and intended change"></textarea>
+      </label>
+      <label class="full">
+        Change reason
+        <textarea rows="2" [(ngModel)]="createForm.changeReason" name="changeReason" placeholder="Business/regulatory/customer reason"></textarea>
+      </label>
+      <label class="full">
+        Impact assessment
+        <textarea rows="2" [(ngModel)]="createForm.impactAssessment" name="impactAssessment" placeholder="Impact on quality, delivery, cost, safety"></textarea>
+      </label>
+      <label>
+        Requested by
+        <input type="text" [(ngModel)]="createForm.requestedBy" name="requestedBy" placeholder="Requester" />
+      </label>
+      <label>
+        Requested date
+        <input type="date" [(ngModel)]="createForm.requestedDate" name="requestedDate" />
+      </label>
+      <label>
+        Target date
+        <input type="date" [(ngModel)]="createForm.targetDate" name="targetDate" />
+      </label>
+      <label>
+        Approved by
+        <input type="text" [(ngModel)]="createForm.approvedBy" name="approvedBy" placeholder="Approver" />
+      </label>
+    </div>
+    <div class="form-actions">
+      <p class="error" *ngIf="saveError">{{ saveError }}</p>
+      <button class="primary" type="button" (click)="createChange()" [disabled]="saving || !createForm.title.trim()">
+        {{ saving ? 'Saving...' : 'Create request' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header register-header">
+      <h2 class="register-title">ECN / ECR tracker</h2>
+      <div class="filter-row">
+        <label class="filter-box">
+          <span>Type</span>
+          <select [ngModel]="activeType()" (ngModelChange)="setType($event)">
+            <option value="All">All</option>
+            <option value="ECR">ECR</option>
+            <option value="ECN">ECN</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>4M</span>
+          <select [ngModel]="activeFourM()" (ngModelChange)="setFourM($event)">
+            <option value="All">All</option>
+            <option value="Man">Man</option>
+            <option value="Machine">Machine</option>
+            <option value="Method">Method</option>
+            <option value="Material">Material</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>Status</span>
+          <select [ngModel]="activeStatus()" (ngModelChange)="setStatus($event)">
+            <option value="All">All status</option>
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="empty" *ngIf="!changes().length">No change requests found for selected filters.</div>
+
+    <article class="change-card" *ngFor="let record of changes()">
+      <div class="change-head">
+        <div>
+          <p class="code">{{ record.code }} · {{ record.requestType }}</p>
+          <h3>{{ record.title }}</h3>
+          <p class="meta">
+            4M: {{ record.fourMCategory }} · Risk: {{ record.riskLevel }} · Requested:
+            {{ record.requestedDate || 'No date' }}
+          </p>
+        </div>
+        <span class="status">{{ record.status }}</span>
+      </div>
+      <p class="description" *ngIf="record.description">{{ record.description }}</p>
+      <div class="details">
+        <span><strong>Reason:</strong> {{ record.changeReason || '—' }}</span>
+        <span><strong>Impact:</strong> {{ record.impactAssessment || '—' }}</span>
+        <span><strong>Requested by:</strong> {{ record.requestedBy || '—' }}</span>
+        <span><strong>Target:</strong> {{ record.targetDate || '—' }}</span>
+        <span><strong>Approved by:</strong> {{ record.approvedBy || '—' }}</span>
+      </div>
+
+      <div class="edit-row" *ngIf="hasEditDraft(record.id)">
+        <label>
+          Status
+          <select [ngModel]="editDraft[record.id]?.status || record.status" (ngModelChange)="patchDraft(record.id, 'status', $event)">
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label>
+          Risk level
+          <select [ngModel]="editDraft[record.id]?.riskLevel || record.riskLevel" (ngModelChange)="patchDraft(record.id, 'riskLevel', $event)">
+            <option *ngFor="let option of riskOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label>
+          Approved by
+          <input type="text" [ngModel]="editDraft[record.id]?.approvedBy ?? record.approvedBy" (ngModelChange)="patchDraft(record.id, 'approvedBy', $event)" />
+        </label>
+        <label>
+          Target date
+          <input type="date" [ngModel]="editDraft[record.id]?.targetDate ?? record.targetDate" (ngModelChange)="patchDraft(record.id, 'targetDate', $event)" />
+        </label>
+      </div>
+
+      <div class="card-actions" *ngIf="!hasEditDraft(record.id)">
+        <button class="ghost small" type="button" (click)="startEdit(record)">Update</button>
+      </div>
+      <div class="card-actions" *ngIf="hasEditDraft(record.id)">
+        <button class="primary small" type="button" (click)="saveChange(record)">Save</button>
+        <button class="ghost small" type="button" (click)="cancelEdit(record.id)">Cancel</button>
+      </div>
+    </article>
+  </section>
+</section>

@@ -41,6 +41,18 @@ export const routes: Routes = [
     title: 'NC Management',
   },
   {
+    path: 'complaints',
+    loadComponent: () =>
+      import('./pages/complaints/complaints').then((m) => m.Complaints),
+    title: 'Complaints',
+  },
+  {
+    path: 'change-management',
+    loadComponent: () =>
+      import('./pages/change-management/change-management').then((m) => m.ChangeManagement),
+    title: 'Change Management',
+  },
+  {
     path: 'reports',
     loadComponent: () => import('./pages/reports/reports').then((m) => m.Reports),
     title: 'Reports',

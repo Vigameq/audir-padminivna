@@ -229,10 +229,33 @@ button.ghost {
 }
 
 .question-pick-item {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
   font-size: 0.85rem;
+  width: 100%;
+}
+
+.question-pick-item input[type='checkbox'] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.question-pick-text {
+  display: block;
+  margin: 0;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.template-edit label.question-pick-text {
+  display: block;
+  gap: 0;
+}
+
+.question-pick-text.assigned {
+  opacity: 0.65;
 }
 
 .subsection-chip-list {
@@ -269,12 +292,27 @@ button.ghost {
   gap: 0.5rem;
 }
 
+.subsection-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.subsection-actions {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
 .subsection-question-list {
   display: grid;
   gap: 0.4rem;
 }
 
 .subsection-question-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
   border: 1px dashed rgba(20, 10, 0, 0.2);
   border-radius: 0.6rem;
   padding: 0.45rem 0.55rem;
@@ -389,7 +427,8 @@ button.ghost {
   margin-top: 1rem;
   display: grid;
   gap: 0.8rem;
-  max-width: 720px;
+  width: 100%;
+  max-width: none;
 }
 
 .template-edit label {
@@ -418,18 +457,35 @@ button.ghost {
   justify-content: space-between;
   font-size: 0.85rem;
   color: var(--color-muted);
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.drag-hint {
+  font-size: 0.75rem;
+  opacity: 0.85;
 }
 
 .question-edit-list {
   display: grid;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .question-edit-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.6rem;
   align-items: center;
+  cursor: grab;
+  width: 100%;
+}
+
+.drag-handle {
+  color: var(--color-muted);
+  font-size: 1rem;
+  letter-spacing: -0.15em;
+  user-select: none;
 }
 
 .question-edit-row input[type='text'] {
@@ -438,6 +494,8 @@ button.ghost {
   border-radius: 0.75rem;
   border: 1px solid rgba(20, 10, 0, 0.15);
   background: var(--color-surface);
+  min-width: 0;
+  width: 100%;
 }
 
 .edit-actions {
