@@ -229,9 +229,9 @@ button.ghost {
 }
 
 .question-pick-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.55rem;
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.5rem;
   align-items: center;
   font-size: 0.85rem;
   width: 100%;
@@ -240,13 +240,17 @@ button.ghost {
 .question-pick-item input[type='checkbox'] {
   margin: 0;
   flex: 0 0 auto;
+  align-self: center;
 }
 
 .question-pick-text {
   display: block;
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   color: var(--color-muted);
   cursor: pointer;
+  text-align: left;
 }
 
 .template-edit label.question-pick-text {

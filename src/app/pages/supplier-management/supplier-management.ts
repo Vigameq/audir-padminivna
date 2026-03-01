@@ -1,10 +1,12 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom, forkJoin } from 'rxjs';
 import {
   SupplierAuditStatus,
   SupplierDashboardSummary,
+  SupplierPpapRecord,
   SupplierService,
   SupplierStatus,
 } from '../../services/supplier.service';
@@ -67,13 +69,15 @@ export class SupplierManagement implements OnInit {
 
   protected ppapForm = {
     supplierId: 0,
-    level: 'Level 3 (Full PPAP package)',
     submissionDate: '',
     remarks: '',
   };
-  protected createPpapFiles: File[] = [];
+  protected ppapLevelSelection: Record<string, boolean> = {};
+  protected ppapLevelFiles: Record<string, File[]> = {};
   protected ppapRecordFiles: Record<number, File[]> = {};
   protected uploadingPpapDocs: Record<number, boolean> = {};
+  protected ppapDocumentsModalOpen = false;
+  protected ppapDocumentsModalRecord: SupplierPpapRecord | null = null;
 
   protected performanceForm = {
     supplierId: 0,
@@ -108,6 +112,7 @@ export class SupplierManagement implements OnInit {
   protected auditEditDraft: Record<number, { status: SupplierAuditStatus }> = {};
 
   ngOnInit(): void {
+    this.resetPpapLevelInputs();
     this.refreshAll();
   }
 
@@ -189,47 +194,111 @@ export class SupplierManagement implements OnInit {
     });
   }
 
-  protected createPpap(): void {
+  protected async createPpap(): Promise<void> {
     if (!this.ppapForm.supplierId) {
       return;
     }
-    this.supplierService
-      .createPpap({
-        supplier_id: this.ppapForm.supplierId,
-        level: this.ppapForm.level.trim() || this.ppapLevelOptions[2],
-        submission_date: this.ppapForm.submissionDate || null,
-        remarks: this.ppapForm.remarks.trim() || null,
-      })
-      .subscribe({
-        next: async (record) => {
+    const selectedLevels = this.ppapLevelOptions.filter((level) => this.ppapLevelSelection[level]);
+    if (!selectedLevels.length) {
+      window.alert('Select at least one PPAP level.');
+      return;
+    }
+    const missingDocs = selectedLevels.find((level) => !(this.ppapLevelFiles[level] ?? []).length);
+    if (missingDocs) {
+      window.alert(`Upload at least one document for ${missingDocs}.`);
+      return;
+    }
+
+    const uploadFailures: string[] = [];
+    try {
+      for (const level of selectedLevels) {
+        const record = await firstValueFrom(
+          this.supplierService.createPpap({
+            supplier_id: this.ppapForm.supplierId,
+            part_no: 'N/A',
+            level,
+            submission_date: this.ppapForm.submissionDate || null,
+            remarks: this.ppapForm.remarks.trim() || null,
+          })
+        );
+        const files = this.ppapLevelFiles[level] ?? [];
+        if (files.length) {
           try {
-            if (this.createPpapFiles.length) {
-              await this.uploadPpapFiles(record.id, this.createPpapFiles);
-            }
-          } catch {
-            window.alert('PPAP created, but document upload failed.');
+            await this.uploadPpapFiles(record.id, files);
+          } catch (error) {
+            uploadFailures.push(`${level}: ${this.getErrorMessage(error)}`);
           }
-          this.ppapForm = {
-            supplierId: 0,
-            level: this.ppapLevelOptions[2],
-            submissionDate: '',
-            remarks: '',
-          };
-          this.createPpapFiles = [];
-          this.supplierService.listDashboardSummary().subscribe();
-        },
-      });
+        }
+      }
+      this.ppapForm = {
+        supplierId: 0,
+        submissionDate: '',
+        remarks: '',
+      };
+      this.resetPpapLevelInputs();
+      await firstValueFrom(this.supplierService.listPpap());
+      this.supplierService.listDashboardSummary().subscribe();
+      if (uploadFailures.length) {
+        window.alert(`PPAP records were created, but document upload failed.\n${uploadFailures.join('\n')}`);
+      }
+    } catch (error) {
+      window.alert(`Unable to create PPAP levels. ${this.getErrorMessage(error)}`);
+    }
   }
 
-  protected onCreatePpapFilesSelected(event: Event): void {
+  protected onPpapLevelToggle(level: string, checked: boolean): void {
+    this.ppapLevelSelection[level] = checked;
+    if (!checked) {
+      this.ppapLevelFiles[level] = [];
+    }
+  }
+
+  protected onPpapLevelFilesSelected(level: string, event: Event): void {
+    if (!this.ppapLevelSelection[level]) {
+      return;
+    }
     const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    this.createPpapFiles = files;
+    const existing = this.ppapLevelFiles[level] ?? [];
+    const incoming = Array.from(input.files ?? []);
+    this.ppapLevelFiles[level] = this.mergeFiles(existing, incoming);
+    input.value = '';
   }
 
   protected onPpapRecordFilesSelected(ppapId: number, event: Event): void {
     const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
+    const existing = this.ppapRecordFiles[ppapId] ?? [];
+    const incoming = Array.from(input.files ?? []);
+    this.ppapRecordFiles[ppapId] = this.mergeFiles(existing, incoming);
+    input.value = '';
+  }
+
+  protected ppapSelectedFileCount(level: string): number {
+    return (this.ppapLevelFiles[level] ?? []).length;
+  }
+
+  protected ppapSelectedFiles(level: string): File[] {
+    return this.ppapLevelFiles[level] ?? [];
+  }
+
+  protected removePpapSelectedLevelFile(level: string, index: number): void {
+    const files = [...(this.ppapLevelFiles[level] ?? [])];
+    if (index < 0 || index >= files.length) {
+      return;
+    }
+    files.splice(index, 1);
+    this.ppapLevelFiles[level] = files;
+  }
+
+  protected ppapRecordSelectedFiles(ppapId: number): File[] {
+    return this.ppapRecordFiles[ppapId] ?? [];
+  }
+
+  protected removePpapRecordSelectedFile(ppapId: number, index: number): void {
+    const files = [...(this.ppapRecordFiles[ppapId] ?? [])];
+    if (index < 0 || index >= files.length) {
+      return;
+    }
+    files.splice(index, 1);
     this.ppapRecordFiles[ppapId] = files;
   }
 
@@ -240,14 +309,29 @@ export class SupplierManagement implements OnInit {
     }
     try {
       await this.uploadPpapFiles(ppapId, files);
-    } catch {
-      window.alert('Unable to upload PPAP documents. Please try again.');
+      await firstValueFrom(this.supplierService.listPpap());
+    } catch (error) {
+      window.alert(`Unable to upload PPAP documents. ${this.getErrorMessage(error)}`);
     }
     this.ppapRecordFiles[ppapId] = [];
   }
 
   protected deletePpapDocument(ppapId: number, documentId: number): void {
-    this.supplierService.deletePpapDocument(ppapId, documentId).subscribe();
+    this.supplierService.deletePpapDocument(ppapId, documentId).subscribe({
+      next: () => {
+        this.supplierService.listPpap().subscribe();
+      },
+    });
+  }
+
+  protected openPpapDocumentsModal(record: SupplierPpapRecord): void {
+    this.ppapDocumentsModalRecord = record;
+    this.ppapDocumentsModalOpen = true;
+  }
+
+  protected closePpapDocumentsModal(): void {
+    this.ppapDocumentsModalOpen = false;
+    this.ppapDocumentsModalRecord = null;
   }
 
   protected createPerformance(): void {
@@ -422,5 +506,45 @@ export class SupplierManagement implements OnInit {
     } finally {
       this.uploadingPpapDocs[ppapId] = false;
     }
+  }
+
+  private resetPpapLevelInputs(): void {
+    this.ppapLevelSelection = {};
+    this.ppapLevelFiles = {};
+    this.ppapLevelOptions.forEach((level) => {
+      this.ppapLevelSelection[level] = false;
+      this.ppapLevelFiles[level] = [];
+    });
+  }
+
+  private mergeFiles(existing: File[], incoming: File[]): File[] {
+    if (!incoming.length) {
+      return existing;
+    }
+    const keyed = new Map<string, File>();
+    for (const file of existing) {
+      keyed.set(this.fileFingerprint(file), file);
+    }
+    for (const file of incoming) {
+      keyed.set(this.fileFingerprint(file), file);
+    }
+    return Array.from(keyed.values());
+  }
+
+  private fileFingerprint(file: File): string {
+    return `${file.name}::${file.size}::${file.lastModified}`;
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      const detail = (error.error && typeof error.error === 'object' && 'detail' in error.error)
+        ? String((error.error as { detail?: unknown }).detail ?? '')
+        : '';
+      return detail || error.message || `HTTP ${error.status}`;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return 'Please try again.';
   }
 }

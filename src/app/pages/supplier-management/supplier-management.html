@@ -186,12 +186,6 @@
         </select>
       </label>
       <label>
-        PPAP level
-        <select [(ngModel)]="ppapForm.level" name="ppapLevel">
-          <option *ngFor="let level of ppapLevelOptions" [value]="level">{{ level }}</option>
-        </select>
-      </label>
-      <label>
         Submission date
         <input type="date" [(ngModel)]="ppapForm.submissionDate" name="ppapSubmissionDate" />
       </label>
@@ -199,13 +193,36 @@
         Remarks
         <textarea rows="2" [(ngModel)]="ppapForm.remarks" name="ppapRemarks" placeholder="Remarks"></textarea>
       </label>
-      <label class="full">
-        Level documents
-        <input type="file" multiple (change)="onCreatePpapFilesSelected($event)" />
-      </label>
+      <div class="full ppap-level-upload-group">
+        <p class="ppap-level-title">PPAP levels and documents</p>
+        <div class="ppap-level-row" *ngFor="let level of ppapLevelOptions">
+          <label class="ppap-level-check">
+            <input
+              type="checkbox"
+              [checked]="ppapLevelSelection[level]"
+              (change)="onPpapLevelToggle(level, $any($event.target).checked)"
+            />
+            <span>{{ level }}</span>
+          </label>
+          <input
+            class="compact-file-input"
+            type="file"
+            multiple
+            [disabled]="!ppapLevelSelection[level]"
+            (change)="onPpapLevelFilesSelected(level, $event)"
+          />
+          <div class="ppap-selected-files ppap-level-selected-files" *ngIf="ppapSelectedFileCount(level)">
+            <span class="ppap-file-count">{{ ppapSelectedFileCount(level) }} file(s) selected</span>
+            <div class="ppap-selected-file" *ngFor="let file of ppapSelectedFiles(level); let i = index">
+              <span class="ppap-selected-file-name">{{ file.name }}</span>
+              <button class="ghost tiny" type="button" (click)="removePpapSelectedLevelFile(level, i)">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="card-actions">
-      <button class="primary" type="button" (click)="createPpap()" [disabled]="!ppapForm.supplierId">Create PPAP record</button>
+      <button class="primary" type="button" (click)="createPpap()" [disabled]="!ppapForm.supplierId">Create PPAP records</button>
     </div>
 
     <div class="list" *ngIf="ppap().length; else noPpap">
@@ -213,33 +230,39 @@
         <div class="item-main">
           <h3>{{ record.supplierCode }} · {{ record.supplierName }}</h3>
           <p>{{ record.level }} · Submission: {{ record.submissionDate ? (record.submissionDate | date:'dd-MM-yyyy') : '—' }}</p>
-          <div class="ppap-document-list" *ngIf="record.documents.length">
-            <a
-              class="ppap-document-link"
-              *ngFor="let document of record.documents"
-              [href]="document.fileUrl"
-              target="_blank"
-              rel="noopener"
-            >
-              {{ document.fileName }}
-            </a>
-          </div>
+          <p class="ppap-doc-title">Uploaded documents: {{ record.documents.length }}</p>
         </div>
         <div class="item-actions ppap-doc-actions">
-          <input type="file" multiple (change)="onPpapRecordFilesSelected(record.id, $event)" />
-          <button class="ghost" type="button" (click)="uploadPpapDocuments(record.id)" [disabled]="uploadingPpapDocs[record.id]">
-            {{ uploadingPpapDocs[record.id] ? 'Uploading...' : 'Upload docs' }}
-          </button>
-          <button
-            class="ghost"
-            type="button"
-            *ngFor="let document of record.documents"
-            (click)="deletePpapDocument(record.id, document.id)"
-          >
-            Delete {{ document.fileName }}
-          </button>
+          <button class="ghost" type="button" (click)="openPpapDocumentsModal(record)">View documents</button>
         </div>
       </article>
+    </div>
+
+    <div class="modal-backdrop" *ngIf="ppapDocumentsModalOpen" (click)="closePpapDocumentsModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <header class="modal-head">
+          <h3>
+            {{ ppapDocumentsModalRecord?.supplierCode }} · {{ ppapDocumentsModalRecord?.supplierName }} ·
+            {{ ppapDocumentsModalRecord?.level }}
+          </h3>
+          <button class="ghost" type="button" (click)="closePpapDocumentsModal()">Close</button>
+        </header>
+        <p class="modal-subhead">Uploaded documents ({{ ppapDocumentsModalRecord?.documents?.length ?? 0 }})</p>
+        <div class="modal-doc-list" *ngIf="(ppapDocumentsModalRecord?.documents?.length ?? 0) > 0; else noModalDocs">
+          <a
+            class="ppap-document-link"
+            *ngFor="let document of ppapDocumentsModalRecord?.documents"
+            [href]="document.fileUrl"
+            target="_blank"
+            rel="noopener"
+          >
+            {{ document.fileName }}
+          </a>
+        </div>
+        <ng-template #noModalDocs>
+          <p class="ppap-doc-empty">No documents uploaded.</p>
+        </ng-template>
+      </section>
     </div>
   </section>
 

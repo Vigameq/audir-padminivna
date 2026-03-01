@@ -304,6 +304,64 @@ button:disabled {
   gap: 0.35rem;
 }
 
+.ppap-doc-title {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.ppap-doc-empty {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 40;
+  padding: 1rem;
+}
+
+.modal-card {
+  width: min(760px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  background: var(--color-surface);
+  border: 1px solid rgba(20, 10, 0, 0.15);
+  border-radius: 1rem;
+  padding: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.modal-subhead {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+}
+
+.modal-doc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .ppap-document-link {
   display: inline-flex;
   align-items: center;
@@ -324,6 +382,146 @@ button:disabled {
 
 .ppap-doc-actions input[type='file'] {
   max-width: 320px;
+}
+
+.ppap-doc-actions .ppap-selected-files {
+  width: 100%;
+}
+
+.ppap-level-upload-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ppap-level-title {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.ppap-level-row {
+  display: grid;
+  grid-template-columns: minmax(360px, 42%) 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.form-grid label.ppap-level-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  color: var(--color-ink);
+  font-size: 0.95rem;
+}
+
+.form-grid label.ppap-level-check input[type='checkbox'] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.form-grid label.ppap-level-check span {
+  display: inline-block;
+  line-height: 1.3;
+}
+
+.ppap-file-count {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.ppap-selected-files {
+  grid-column: 3;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  justify-self: start;
+  align-self: center;
+  min-width: 0;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.ppap-selected-file {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid rgba(20, 10, 0, 0.1);
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.45rem;
+  background: var(--color-surface);
+  max-width: 100%;
+}
+
+.ppap-level-selected-files {
+  min-height: 2.2rem;
+}
+
+.ppap-selected-file-name {
+  font-size: 0.82rem;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ghost.tiny {
+  padding: 0.26rem 0.6rem;
+  font-size: 0.76rem;
+}
+
+input[type='file'].compact-file-input {
+  font-size: 0;
+  color: transparent;
+  max-width: 140px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+input[type='file'].compact-file-input:disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+input[type='file'].compact-file-input::file-selector-button {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+  border: 1px solid rgba(20, 10, 0, 0.18);
+  border-radius: 0.55rem;
+  background: var(--color-surface);
+  padding: 0.38rem 0.66rem;
+  cursor: pointer;
+}
+
+input[type='file'].compact-file-input:disabled::file-selector-button {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+input[type='file'].compact-file-input::-webkit-file-upload-button {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+  border: 1px solid rgba(20, 10, 0, 0.18);
+  border-radius: 0.55rem;
+  background: var(--color-surface);
+  padding: 0.38rem 0.66rem;
+  cursor: pointer;
+}
+
+input[type='file'].compact-file-input:disabled::-webkit-file-upload-button {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .table-wrap {
@@ -376,6 +574,18 @@ td {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ppap-level-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .ppap-selected-files {
+    grid-column: 1;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
 
   .item {
