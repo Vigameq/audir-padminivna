@@ -83,7 +83,7 @@
 .tag {
   padding: 0.3rem 0.75rem;
   border-radius: 999px;
-  background: rgba(255, 154, 0, 0.12);
+  background: rgba(0, 179, 136, 0.12);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -99,7 +99,7 @@
 
 .tag .remove {
   border: none;
-  background: rgba(255, 154, 0, 0.25);
+  background: rgba(0, 179, 136, 0.25);
   color: var(--color-muted);
   width: 1.2rem;
   height: 1.2rem;
@@ -162,7 +162,7 @@
 }
 
 .rule-row.rule-head {
-  background: rgba(255, 154, 0, 0.08);
+  background: rgba(0, 179, 136, 0.08);
   font-weight: 600;
 }
 
@@ -291,7 +291,7 @@ button.primary {
 
 button.ghost {
   background: var(--color-surface)6eb;
-  border-color: rgba(255, 154, 0, 0.35);
+  border-color: rgba(0, 179, 136, 0.35);
 }
 
 @media (max-width: 980px) {

@@ -50,7 +50,7 @@ button.primary {
 
 button.ghost {
   background: var(--color-surface)6eb;
-  border-color: rgba(255, 154, 0, 0.35);
+  border-color: rgba(0, 179, 136, 0.35);
 }
 
 button.small {
@@ -126,7 +126,7 @@ select {
   height: 2.2rem;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255, 154, 0, 0.35);
+  border: 1px solid rgba(0, 179, 136, 0.35);
   background: var(--color-surface)6eb;
   display: grid;
   place-items: center;
@@ -140,7 +140,7 @@ select {
 
 .icon-button:hover {
   border-color: var(--color-accent);
-  box-shadow: 0 10px 20px rgba(255, 154, 0, 0.2);
+  box-shadow: 0 10px 20px rgba(0, 179, 136, 0.2);
 }
 
 .icon-button.danger {

@@ -51,7 +51,7 @@ button.primary {
 
 button.ghost {
   background: var(--color-surface)6eb;
-  border-color: rgba(255, 154, 0, 0.35);
+  border-color: rgba(0, 179, 136, 0.35);
 }
 
 button.small {
@@ -82,7 +82,7 @@ button:disabled,
 
 .file-trigger.ghost {
   background: var(--color-surface)6eb;
-  border-color: rgba(255, 154, 0, 0.35);
+  border-color: rgba(0, 179, 136, 0.35);
 }
 
 .file-trigger.small {
@@ -293,8 +293,8 @@ button:disabled,
 
 .section-toggle {
   width: 100%;
-  border: 1px solid rgba(255, 154, 0, 0.28);
-  background: rgba(255, 154, 0, 0.08);
+  border: 1px solid rgba(0, 179, 136, 0.28);
+  background: rgba(0, 179, 136, 0.08);
   border-radius: 0.85rem;
   padding: 0.55rem 0.75rem;
   display: grid;
@@ -404,13 +404,13 @@ button:disabled,
 
 .chip:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 154, 0, 0.35);
-  box-shadow: 0 4px 10px rgba(255, 154, 0, 0.18);
+  border-color: rgba(0, 179, 136, 0.35);
+  box-shadow: 0 4px 10px rgba(0, 179, 136, 0.18);
 }
 
 .chip.selected {
-  border-color: rgba(255, 154, 0, 0.9);
-  background: rgba(255, 154, 0, 0.9);
+  border-color: rgba(0, 179, 136, 0.9);
+  background: rgba(0, 179, 136, 0.9);
   color: #2a1b00;
 }
 
@@ -428,7 +428,7 @@ button:disabled,
 .progress-bar {
   width: 100%;
   height: 0.35rem;
-  background: rgba(255, 154, 0, 0.15);
+  background: rgba(0, 179, 136, 0.15);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -454,7 +454,7 @@ button:disabled,
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-muted);
-  border: 1px solid rgba(255, 154, 0, 0.3);
+  border: 1px solid rgba(0, 179, 136, 0.3);
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
   width: fit-content;

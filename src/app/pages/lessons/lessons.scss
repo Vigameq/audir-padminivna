@@ -126,7 +126,7 @@ button.primary {
 
 button.ghost {
   background: var(--color-surface);
-  border-color: rgba(255, 154, 0, 0.35);
+  border-color: rgba(0, 179, 136, 0.35);
 }
 
 button.small {
@@ -235,7 +235,7 @@ button:disabled {
 
 .tag {
   border-radius: 999px;
-  border: 1px solid rgba(255, 154, 0, 0.4);
+  border: 1px solid rgba(0, 179, 136, 0.4);
   padding: 0.15rem 0.55rem;
   font-size: 0.72rem;
 }

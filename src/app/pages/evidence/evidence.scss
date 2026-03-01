@@ -83,7 +83,7 @@
 }
 
 .file-card:hover {
-  border-color: rgba(255, 154, 0, 0.4);
+  border-color: rgba(0, 179, 136, 0.4);
   box-shadow: 0 10px 20px rgba(16, 24, 40, 0.08);
 }
 
@@ -121,16 +121,16 @@
 }
 
 .back-link {
-  border: 1px solid rgba(255, 154, 0, 0.4);
+  border: 1px solid rgba(0, 179, 136, 0.4);
   border-radius: 999px;
   padding: 0.45rem 1.1rem;
-  background: #fff7eb;
+  background: #eefaf5;
   color: #a8550d;
   font-weight: 600;
   cursor: pointer;
 }
 
 .back-link:hover {
-  border-color: rgba(255, 154, 0, 0.7);
-  box-shadow: 0 8px 16px rgba(255, 154, 0, 0.18);
+  border-color: rgba(0, 179, 136, 0.7);
+  box-shadow: 0 8px 16px rgba(0, 179, 136, 0.18);
 }
