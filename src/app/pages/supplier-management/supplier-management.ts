@@ -6,6 +6,7 @@ import { firstValueFrom, forkJoin } from 'rxjs';
 import {
   SupplierAuditStatus,
   SupplierDashboardSummary,
+  SupplierPpapDocument,
   SupplierPpapRecord,
   SupplierService,
   SupplierStatus,
@@ -78,6 +79,7 @@ export class SupplierManagement implements OnInit {
   protected uploadingPpapDocs: Record<number, boolean> = {};
   protected ppapDocumentsModalOpen = false;
   protected ppapDocumentsModalRecord: SupplierPpapRecord | null = null;
+  protected openingPpapDocumentId: number | null = null;
 
   protected performanceForm = {
     supplierId: 0,
@@ -332,6 +334,24 @@ export class SupplierManagement implements OnInit {
   protected closePpapDocumentsModal(): void {
     this.ppapDocumentsModalOpen = false;
     this.ppapDocumentsModalRecord = null;
+  }
+
+  protected async openPpapDocument(ppapId: number, document: SupplierPpapDocument): Promise<void> {
+    if (!ppapId || !document?.id) {
+      return;
+    }
+    this.openingPpapDocumentId = document.id;
+    try {
+      const result = await firstValueFrom(this.supplierService.getPpapDocumentDownloadUrl(ppapId, document.id));
+      const url = String(result?.url ?? '').trim() || document.fileUrl;
+      if (url) {
+        window.open(url, '_blank', 'noopener');
+      }
+    } catch (error) {
+      window.alert(`Unable to open document. ${this.getErrorMessage(error)}`);
+    } finally {
+      this.openingPpapDocumentId = null;
+    }
   }
 
   protected createPerformance(): void {

@@ -249,15 +249,15 @@
         </header>
         <p class="modal-subhead">Uploaded documents ({{ ppapDocumentsModalRecord?.documents?.length ?? 0 }})</p>
         <div class="modal-doc-list" *ngIf="(ppapDocumentsModalRecord?.documents?.length ?? 0) > 0; else noModalDocs">
-          <a
+          <button
             class="ppap-document-link"
             *ngFor="let document of ppapDocumentsModalRecord?.documents"
-            [href]="document.fileUrl"
-            target="_blank"
-            rel="noopener"
+            type="button"
+            [disabled]="openingPpapDocumentId === document.id"
+            (click)="openPpapDocument(ppapDocumentsModalRecord?.id ?? 0, document)"
           >
-            {{ document.fileName }}
-          </a>
+            {{ openingPpapDocumentId === document.id ? 'Opening...' : document.fileName }}
+          </button>
         </div>
         <ng-template #noModalDocs>
           <p class="ppap-doc-empty">No documents uploaded.</p>
