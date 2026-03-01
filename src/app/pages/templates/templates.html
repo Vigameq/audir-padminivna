@@ -31,6 +31,14 @@
           <ol class="question-list" *ngIf="editingTemplateId !== template.id">
             <li *ngFor="let question of template.questions">{{ question }}</li>
           </ol>
+          <div class="subsection-list" *ngIf="editingTemplateId !== template.id && template.subsections.length">
+            <h4>Subsections</h4>
+            <div class="subsection-chip-list">
+              <span class="tag" *ngFor="let section of template.subsections">
+                {{ section.name }} ({{ section.questionIndices.length }})
+              </span>
+            </div>
+          </div>
           <div
             class="template-edit"
             *ngIf="editingTemplateId === template.id"
@@ -68,6 +76,77 @@
                     Remove
                   </button>
                 </div>
+              </div>
+            </div>
+            <div class="subsection-builder">
+              <div class="question-edit-header">
+                <span>Subsections</span>
+              </div>
+              <div class="subsection-creator">
+                <input
+                  type="text"
+                  [(ngModel)]="editSubsectionDraftName"
+                  name="edit-subsection-name-{{ template.id }}"
+                  placeholder="Subsection name"
+                  (click)="$event.stopPropagation()"
+                />
+                <button
+                  class="ghost small"
+                  type="button"
+                  (click)="addEditSubsectionFromSelection(); $event.stopPropagation()"
+                >
+                  Create subsection
+                </button>
+              </div>
+              <div class="question-pick-list" *ngIf="editQuestions.length">
+                <label class="question-pick-item" *ngFor="let question of editQuestions; let i = index; trackBy: trackByIndex">
+                  <input
+                    type="checkbox"
+                    [checked]="!!editSelectedQuestions[i]"
+                    (change)="toggleEditQuestionSelection(i, $any($event.target).checked); $event.stopPropagation()"
+                  />
+                  <span>Q{{ i + 1 }} · {{ question }}</span>
+                </label>
+              </div>
+              <div class="subsection-chip-list" *ngIf="editSubsections.length">
+                <div class="subsection-instruction">Drag subsections and questions to reorder.</div>
+                <article
+                  class="subsection-card"
+                  *ngFor="let section of editSubsections"
+                  draggable="true"
+                  (dragstart)="onSubsectionDragStart(section.id); $event.stopPropagation()"
+                  (dragover)="onSubsectionDragOver($event); $event.stopPropagation()"
+                  (drop)="onSubsectionDrop(section.id); $event.stopPropagation()"
+                  (dragend)="onSubsectionDragEnd()"
+                >
+                  <header>
+                    <strong>{{ section.name }}</strong>
+                    <button
+                      class="ghost small danger"
+                      type="button"
+                      (click)="removeEditSubsection(section.id); $event.stopPropagation()"
+                    >
+                      Remove
+                    </button>
+                  </header>
+                  <div
+                    class="subsection-question-list"
+                    (dragover)="onQuestionDragOver($event); $event.stopPropagation()"
+                    (drop)="onQuestionDrop(section.id); $event.stopPropagation()"
+                  >
+                    <div
+                      class="subsection-question-item"
+                      *ngFor="let questionIndex of subsectionQuestionIndexes(section)"
+                      draggable="true"
+                      (dragstart)="onQuestionDragStart(section.id, questionIndex); $event.stopPropagation()"
+                      (dragover)="onQuestionDragOver($event); $event.stopPropagation()"
+                      (drop)="onQuestionDrop(section.id, questionIndex); $event.stopPropagation()"
+                      (dragend)="onQuestionDragEnd()"
+                    >
+                      <span>Q{{ questionIndex + 1 }} · {{ subsectionQuestionLabel(questionIndex) }}</span>
+                    </div>
+                  </div>
+                </article>
               </div>
             </div>
             <p class="error" *ngIf="editError">{{ editError }}</p>
@@ -188,6 +267,38 @@
           <div class="note-meta">
             <span>Optional note saved with this import.</span>
             <span [class.limit]="noteChars >= 100">{{ noteChars }}/100</span>
+          </div>
+        </div>
+        <div class="subsection-builder" *ngIf="questions.length">
+          <div class="question-edit-header">
+            <span>Subsections (optional)</span>
+          </div>
+          <div class="subsection-creator">
+            <input
+              type="text"
+              name="subsectionName"
+              [(ngModel)]="subsectionDraftName"
+              placeholder="Subsection name"
+            />
+            <button class="ghost small" type="button" (click)="addImportSubsectionFromSelection()">
+              Create subsection
+            </button>
+          </div>
+          <div class="question-pick-list">
+            <label class="question-pick-item" *ngFor="let question of questions; let i = index; trackBy: trackByIndex">
+              <input
+                type="checkbox"
+                [checked]="!!importSelectedQuestions[i]"
+                (change)="toggleImportQuestionSelection(i, $any($event.target).checked)"
+              />
+              <span>Q{{ i + 1 }} · {{ question }}</span>
+            </label>
+          </div>
+          <div class="subsection-chip-list" *ngIf="importSubsections.length">
+            <span class="tag" *ngFor="let section of importSubsections">
+              {{ section.name }} ({{ section.questionIndices.length }})
+              <button class="remove" type="button" (click)="removeImportSubsection(section.id)">×</button>
+            </span>
           </div>
         </div>
         <p class="error" *ngIf="createError">{{ createError }}</p>

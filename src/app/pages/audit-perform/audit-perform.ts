@@ -89,6 +89,7 @@ export class AuditPerform implements OnInit {
   protected ncErrors: boolean[] = [];
   protected noteHover: string | null = null;
   protected isQrGenerating: Record<string, boolean> = {};
+  protected subsectionHeaderByQuestion: Record<number, string> = {};
   private completedAuditCodes = new Set<string>();
 
   protected get totalQuestions(): number {
@@ -149,6 +150,7 @@ export class AuditPerform implements OnInit {
     this.activeAudit = audit;
     this.router.navigate(['/audit-perform', audit.code], { replaceUrl: true });
     this.activeTemplate = this.resolveTemplateForAudit(audit);
+    this.subsectionHeaderByQuestion = this.buildSubsectionHeaderMap(this.activeTemplate);
     const response = this.responseService
       .responses()
       .find((item) => item.name === audit.responseType);
@@ -198,6 +200,7 @@ export class AuditPerform implements OnInit {
     this.evidenceDataUrlsByAsset = {};
     this.evidenceItemsByAsset = {};
     this.ncErrors = [];
+    this.subsectionHeaderByQuestion = {};
     this.router.navigate(['/audit-perform'], { replaceUrl: true });
   }
 
@@ -565,6 +568,32 @@ export class AuditPerform implements OnInit {
     );
   }
 
+  private buildSubsectionHeaderMap(template: TemplateRecord | null): Record<number, string> {
+    if (!template?.subsections?.length) {
+      return {};
+    }
+    const headers: Record<number, string> = {};
+    template.subsections.forEach((section) => {
+      const name = String(section?.name ?? '').trim();
+      const indices = Array.isArray(section?.questionIndices)
+        ? section.questionIndices
+            .map((index) => Number(index))
+            .filter(
+              (index) =>
+                Number.isInteger(index) &&
+                index >= 0 &&
+                index < template.questions.length
+            )
+            .sort((a, b) => a - b)
+        : [];
+      if (!name || !indices.length) {
+        return;
+      }
+      headers[indices[0]] = name;
+    });
+    return headers;
+  }
+
   private ensureAssetState(asset: string): void {
     if (!this.activeTemplate) {
       return;
@@ -777,6 +806,10 @@ export class AuditPerform implements OnInit {
 
   protected canPerformAudit(audit: AuditPlanRecord): boolean {
     return this.isAssignedToCurrentUser(audit);
+  }
+
+  protected getSubsectionHeader(index: number): string {
+    return this.subsectionHeaderByQuestion[index] ?? '';
   }
 
   protected async onEvidenceSelected(index: number, event: Event): Promise<void> {

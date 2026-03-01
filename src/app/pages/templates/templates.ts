@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
 import { TemplateRecord, TemplateService } from '../../services/template.service';
 
+type TemplateSubsection = { id: string; name: string; questionIndices: number[] };
+
 @Component({
   selector: 'app-templates',
   imports: [CommonModule, FormsModule],
@@ -25,7 +27,15 @@ export class Templates implements OnInit {
   protected editingTemplateId: string | null = null;
   protected editName = '';
   protected editQuestions: string[] = [];
+  protected editSubsections: TemplateSubsection[] = [];
   protected editError = '';
+  protected subsectionDraftName = '';
+  protected importSelectedQuestions: Record<number, boolean> = {};
+  protected importSubsections: TemplateSubsection[] = [];
+  protected editSubsectionDraftName = '';
+  protected editSelectedQuestions: Record<number, boolean> = {};
+  protected draggingSubsectionId: string | null = null;
+  protected draggingQuestion: { sectionId: string; questionIndex: number } | null = null;
 
   protected get questions(): string[] {
     return this.templateService.questions();
@@ -65,6 +75,9 @@ export class Templates implements OnInit {
         return true;
       });
       this.templateService.setQuestions(questions);
+      this.importSelectedQuestions = {};
+      this.importSubsections = [];
+      this.subsectionDraftName = '';
     } catch {
       this.importError = 'Unable to read the spreadsheet. Please upload a valid .xlsx file.';
     } finally {
@@ -85,6 +98,9 @@ export class Templates implements OnInit {
     this.showImportModal = false;
     this.createError = '';
     this.selectedFileName = '';
+    this.subsectionDraftName = '';
+    this.importSelectedQuestions = {};
+    this.importSubsections = [];
   }
 
   protected updateNoteChars(value: string): void {
@@ -104,6 +120,7 @@ export class Templates implements OnInit {
         note: this.importNote.trim(),
         tags: [],
         questions: this.questions,
+        subsections: this.normalizeSubsections(this.importSubsections, this.questions.length),
       })
       .subscribe({
         next: () => {
@@ -112,6 +129,9 @@ export class Templates implements OnInit {
           this.noteChars = 0;
           this.selectedFileName = '';
           this.createError = '';
+          this.subsectionDraftName = '';
+          this.importSelectedQuestions = {};
+          this.importSubsections = [];
           this.showImportModal = false;
         },
       });
@@ -137,6 +157,11 @@ export class Templates implements OnInit {
     this.expandedTemplateId = template.id;
     this.editName = template.name;
     this.editQuestions = [...template.questions];
+    this.editSubsections = this.normalizeSubsections(template.subsections ?? [], template.questions.length);
+    this.editSubsectionDraftName = '';
+    this.editSelectedQuestions = {};
+    this.draggingSubsectionId = null;
+    this.draggingQuestion = null;
     this.editError = '';
   }
 
@@ -144,6 +169,11 @@ export class Templates implements OnInit {
     this.editingTemplateId = null;
     this.editName = '';
     this.editQuestions = [];
+    this.editSubsections = [];
+    this.editSubsectionDraftName = '';
+    this.editSelectedQuestions = {};
+    this.draggingSubsectionId = null;
+    this.draggingQuestion = null;
     this.editError = '';
   }
 
@@ -153,6 +183,15 @@ export class Templates implements OnInit {
 
   protected removeQuestion(index: number): void {
     this.editQuestions = this.editQuestions.filter((_, i) => i !== index);
+    this.editSubsections = this.normalizeSubsections(
+      this.editSubsections.map((section) => ({
+        ...section,
+        questionIndices: section.questionIndices
+          .filter((questionIndex) => questionIndex !== index)
+          .map((questionIndex) => (questionIndex > index ? questionIndex - 1 : questionIndex)),
+      })),
+      this.editQuestions.length
+    );
   }
 
   protected saveTemplate(template: TemplateRecord): void {
@@ -172,12 +211,18 @@ export class Templates implements OnInit {
         note: template.note ?? null,
         tags: template.tags ?? [],
         questions,
+        subsections: this.normalizeSubsections(this.editSubsections, questions.length),
       })
       .subscribe({
         next: () => {
           this.editingTemplateId = null;
           this.editName = '';
           this.editQuestions = [];
+          this.editSubsections = [];
+          this.editSubsectionDraftName = '';
+          this.editSelectedQuestions = {};
+          this.draggingSubsectionId = null;
+          this.draggingQuestion = null;
           this.editError = '';
         },
         error: () => {
@@ -192,5 +237,189 @@ export class Templates implements OnInit {
 
   protected trackByIndex(index: number): number {
     return index;
+  }
+
+  protected toggleImportQuestionSelection(index: number, checked: boolean): void {
+    this.importSelectedQuestions = {
+      ...this.importSelectedQuestions,
+      [index]: checked,
+    };
+  }
+
+  protected addImportSubsectionFromSelection(): void {
+    const name = this.subsectionDraftName.trim();
+    if (!name) {
+      this.createError = 'Enter subsection name.';
+      return;
+    }
+    const selected = Object.entries(this.importSelectedQuestions)
+      .filter(([, checked]) => checked)
+      .map(([index]) => Number(index))
+      .filter((index) => Number.isInteger(index))
+      .sort((a, b) => a - b);
+    if (!selected.length) {
+      this.createError = 'Select at least one question for subsection.';
+      return;
+    }
+    this.importSubsections = this.normalizeSubsections(
+      [
+        ...this.importSubsections,
+        {
+          id: crypto.randomUUID(),
+          name,
+          questionIndices: [...new Set(selected)],
+        },
+      ],
+      this.questions.length
+    );
+    this.importSelectedQuestions = {};
+    this.subsectionDraftName = '';
+    this.createError = '';
+  }
+
+  protected removeImportSubsection(id: string): void {
+    this.importSubsections = this.importSubsections.filter((section) => section.id !== id);
+  }
+
+  protected toggleEditQuestionSelection(index: number, checked: boolean): void {
+    this.editSelectedQuestions = {
+      ...this.editSelectedQuestions,
+      [index]: checked,
+    };
+  }
+
+  protected addEditSubsectionFromSelection(): void {
+    const name = this.editSubsectionDraftName.trim();
+    if (!name) {
+      this.editError = 'Enter subsection name.';
+      return;
+    }
+    const selected = Object.entries(this.editSelectedQuestions)
+      .filter(([, checked]) => checked)
+      .map(([index]) => Number(index))
+      .filter((index) => Number.isInteger(index))
+      .sort((a, b) => a - b);
+    if (!selected.length) {
+      this.editError = 'Select at least one question for subsection.';
+      return;
+    }
+    this.editSubsections = this.normalizeSubsections(
+      [
+        ...this.editSubsections,
+        { id: crypto.randomUUID(), name, questionIndices: [...new Set(selected)] },
+      ],
+      this.editQuestions.length
+    );
+    this.editSelectedQuestions = {};
+    this.editSubsectionDraftName = '';
+    this.editError = '';
+  }
+
+  protected removeEditSubsection(id: string): void {
+    this.editSubsections = this.editSubsections.filter((section) => section.id !== id);
+  }
+
+  protected subsectionQuestionIndexes(section: TemplateSubsection): number[] {
+    return section.questionIndices;
+  }
+
+  protected subsectionQuestionLabel(index: number): string {
+    return this.editQuestions[index] || `Question ${index + 1}`;
+  }
+
+  protected onSubsectionDragStart(sectionId: string): void {
+    this.draggingSubsectionId = sectionId;
+  }
+
+  protected onSubsectionDragOver(event: DragEvent): void {
+    event.preventDefault();
+  }
+
+  protected onSubsectionDrop(targetSectionId: string): void {
+    if (!this.draggingSubsectionId || this.draggingSubsectionId === targetSectionId) {
+      return;
+    }
+    const from = this.editSubsections.findIndex((section) => section.id === this.draggingSubsectionId);
+    const to = this.editSubsections.findIndex((section) => section.id === targetSectionId);
+    if (from < 0 || to < 0) {
+      this.draggingSubsectionId = null;
+      return;
+    }
+    const next = [...this.editSubsections];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    this.editSubsections = next;
+    this.draggingSubsectionId = null;
+  }
+
+  protected onSubsectionDragEnd(): void {
+    this.draggingSubsectionId = null;
+  }
+
+  protected onQuestionDragStart(sectionId: string, questionIndex: number): void {
+    this.draggingQuestion = { sectionId, questionIndex };
+  }
+
+  protected onQuestionDragOver(event: DragEvent): void {
+    event.preventDefault();
+  }
+
+  protected onQuestionDrop(targetSectionId: string, beforeQuestionIndex?: number): void {
+    if (!this.draggingQuestion) {
+      return;
+    }
+    const { sectionId: fromSectionId, questionIndex } = this.draggingQuestion;
+    const source = this.editSubsections.find((section) => section.id === fromSectionId);
+    const target = this.editSubsections.find((section) => section.id === targetSectionId);
+    if (!source || !target) {
+      this.draggingQuestion = null;
+      return;
+    }
+
+    source.questionIndices = source.questionIndices.filter((index) => index !== questionIndex);
+    target.questionIndices = target.questionIndices.filter((index) => index !== questionIndex);
+    if (beforeQuestionIndex !== undefined) {
+      const insertAt = target.questionIndices.findIndex((index) => index === beforeQuestionIndex);
+      if (insertAt >= 0) {
+        target.questionIndices.splice(insertAt, 0, questionIndex);
+      } else {
+        target.questionIndices.push(questionIndex);
+      }
+    } else {
+      target.questionIndices.push(questionIndex);
+    }
+
+    this.editSubsections = this.normalizeSubsections(this.editSubsections, this.editQuestions.length);
+    this.draggingQuestion = null;
+  }
+
+  protected onQuestionDragEnd(): void {
+    this.draggingQuestion = null;
+  }
+
+  private normalizeSubsections(values: TemplateSubsection[], maxQuestions: number): TemplateSubsection[] {
+    const normalized = values
+      .map((value, index) => ({
+        id: value.id || `subsection-${index + 1}`,
+        name: value.name.trim(),
+        questionIndices: [...new Set(value.questionIndices)]
+          .map((item) => Number(item))
+          .filter(
+            (item) =>
+              Number.isInteger(item) && item >= 0 && (maxQuestions <= 0 || item < maxQuestions)
+          )
+          .sort((a, b) => a - b),
+      }))
+      .filter((value) => value.name && value.questionIndices.length > 0);
+
+    const seen = new Set<string>();
+    return normalized.filter((section) => {
+      const key = section.name.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
   }
 }

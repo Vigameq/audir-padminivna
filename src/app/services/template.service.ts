@@ -11,6 +11,7 @@ export type TemplateRecord = {
   note: string;
   tags: string[];
   questions: string[];
+  subsections: { id: string; name: string; questionIndices: number[] }[];
   createdAt: string;
 };
 
@@ -72,6 +73,7 @@ export class TemplateService {
         note: payload.note ?? null,
         tags: payload.tags ?? [],
         questions: payload.questions ?? [],
+        subsections: payload.subsections ?? [],
       })
       .pipe(switchMap(() => this.syncFromApi()));
   }
@@ -92,6 +94,7 @@ export class TemplateService {
         note: payload.note ?? null,
         tags: payload.tags ?? [],
         questions: payload.questions ?? [],
+        subsections: payload.subsections ?? [],
       })
       .pipe(switchMap(() => this.syncFromApi()));
   }
@@ -121,6 +124,7 @@ export class TemplateService {
               note: template.note ?? null,
               tags: template.tags ?? [],
               questions: template.questions ?? [],
+              subsections: template.subsections ?? [],
             })
           )
         ).pipe(switchMap(() => this.syncFromApi()));
@@ -183,6 +187,10 @@ export class TemplateService {
       note: String(payload?.note ?? ''),
       tags: Array.isArray(payload?.tags) ? payload.tags : [],
       questions: Array.isArray(payload?.questions) ? payload.questions : [],
+      subsections: this.normalizeSubsections(
+        Array.isArray(payload?.subsections) ? payload.subsections : [],
+        Array.isArray(payload?.questions) ? payload.questions.length : 0
+      ),
       createdAt: String(payload?.created_at ?? ''),
     };
   }
@@ -200,7 +208,11 @@ export class TemplateService {
         return;
       }
       seen.add(key);
-      result.push({ ...value, name: normalized });
+      result.push({
+        ...value,
+        name: normalized,
+        subsections: this.normalizeSubsections(value.subsections, value.questions?.length ?? 0),
+      });
     });
     return result;
   }
@@ -208,5 +220,41 @@ export class TemplateService {
   private hasName(values: TemplateRecord[], candidate: string): boolean {
     const key = candidate.trim().toLowerCase();
     return values.some((value) => value.name.trim().toLowerCase() === key);
+  }
+
+  private normalizeSubsections(
+    values: any[],
+    totalQuestions: number
+  ): { id: string; name: string; questionIndices: number[] }[] {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+    return values
+      .map((value, idx) => {
+        const name = String(value?.name ?? '').trim();
+        if (!name) {
+          return null;
+        }
+        const questionIndices = Array.isArray(value?.questionIndices)
+          ? value.questionIndices
+              .map((entry: any) => Number(entry))
+              .filter(
+                (entry: number) =>
+                  Number.isInteger(entry) &&
+                  entry >= 0 &&
+                  (totalQuestions <= 0 || entry < totalQuestions)
+              )
+          : [];
+        const uniqueIndices = Array.from(new Set<number>(questionIndices)).sort((a, b) => a - b);
+        if (!uniqueIndices.length) {
+          return null;
+        }
+        return {
+          id: String(value?.id ?? `subsection-${idx + 1}`),
+          name,
+          questionIndices: uniqueIndices,
+        };
+      })
+      .filter((value): value is { id: string; name: string; questionIndices: number[] } => !!value);
   }
 }

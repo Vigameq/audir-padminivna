@@ -482,35 +482,46 @@ router.delete('/response-types/:id', requireAuth, async (req: AuthedRequest, res
 
 router.get('/templates', requireAuth, async (req: AuthedRequest, res) => {
   const { rows } = await pool.query(
-    'SELECT id, name, note, tags, questions, created_at FROM audit_templates WHERE tenant_id = $1 ORDER BY created_at DESC',
+    `SELECT id, name, note, tags, questions, COALESCE(subsections, '[]'::jsonb) AS subsections, created_at
+     FROM audit_templates
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC`,
     [req.user?.tenant_id]
   );
   return res.json(rows);
 });
 
 router.post('/templates', requireAuth, async (req: AuthedRequest, res) => {
-  const { name, note, tags, questions } = req.body ?? {};
+  const { name, note, tags, questions, subsections } = req.body ?? {};
   const { rows } = await pool.query(
-    `INSERT INTO audit_templates (tenant_id, name, note, tags, questions, created_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
-     RETURNING id, name, note, tags, questions, created_at`,
-    [req.user?.tenant_id, name, note ?? null, JSON.stringify(tags ?? []), JSON.stringify(questions ?? [])]
+    `INSERT INTO audit_templates (tenant_id, name, note, tags, questions, subsections, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     RETURNING id, name, note, tags, questions, COALESCE(subsections, '[]'::jsonb) AS subsections, created_at`,
+    [
+      req.user?.tenant_id,
+      name,
+      note ?? null,
+      JSON.stringify(tags ?? []),
+      JSON.stringify(questions ?? []),
+      JSON.stringify(subsections ?? []),
+    ]
   );
   return res.status(201).json(rows[0]);
 });
 
 router.put('/templates/:id', requireAuth, async (req: AuthedRequest, res) => {
-  const { name, note, tags, questions } = req.body ?? {};
+  const { name, note, tags, questions, subsections } = req.body ?? {};
   const { rows } = await pool.query(
     `UPDATE audit_templates
-     SET name = $1, note = $2, tags = $3, questions = $4
-     WHERE id = $5 AND tenant_id = $6
-     RETURNING id, name, note, tags, questions, created_at`,
+     SET name = $1, note = $2, tags = $3, questions = $4, subsections = $5
+     WHERE id = $6 AND tenant_id = $7
+     RETURNING id, name, note, tags, questions, COALESCE(subsections, '[]'::jsonb) AS subsections, created_at`,
     [
       name,
       note ?? null,
       JSON.stringify(tags ?? []),
       JSON.stringify(questions ?? []),
+      JSON.stringify(subsections ?? []),
       Number(req.params.id),
       req.user?.tenant_id,
     ]

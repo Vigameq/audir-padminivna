@@ -42,17 +42,7 @@ export class Dashboard implements OnInit {
   }
 
   protected get dashboardTitle(): string {
-    const role = this.auth.role();
-    if (role === 'Auditor') {
-      return 'Auditor Overview';
-    }
-    if (role === 'Manager') {
-      return 'Manager Overview';
-    }
-    if (role === 'Super Admin') {
-      return 'Super Admin Overview';
-    }
-    return 'Dashboard';
+    return 'Quality Health Dashboard';
   }
 
   protected get isAuditor(): boolean {

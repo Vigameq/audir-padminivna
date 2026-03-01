@@ -138,6 +138,9 @@
         </div>
         <ol class="question-list" *ngIf="activeTemplate">
           <li class="question-card" *ngFor="let question of activeTemplate.questions; let i = index">
+            <div class="question-subsection" *ngIf="getSubsectionHeader(i)">
+              {{ getSubsectionHeader(i) }}
+            </div>
             <div class="question-header">
               <div>
                 <span class="question-index">Q{{ i + 1 }}</span>

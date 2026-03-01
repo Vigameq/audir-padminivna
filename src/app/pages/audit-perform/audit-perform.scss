@@ -397,6 +397,19 @@ button:disabled,
   gap: 0.9rem;
 }
 
+.question-subsection {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border: 1px solid rgba(255, 154, 0, 0.3);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  width: fit-content;
+}
+
 .question-header {
   display: flex;
   align-items: flex-start;
