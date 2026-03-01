@@ -1,0 +1,268 @@
+<section class="msa">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Measurement System Analysis</p>
+      <h1>MSA Workspace</h1>
+      <p class="subtitle">Manage GRR, Bias, Linearity, and Stability studies with calculation and closure workflow.</p>
+    </div>
+    <button class="ghost" type="button" (click)="refresh()">Refresh</button>
+  </header>
+
+  <p class="error" *ngIf="error">{{ error }}</p>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Create study</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Study type
+        <select [(ngModel)]="createForm.studyType" name="studyType">
+          <option *ngFor="let option of studyTypeOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Instrument
+        <select [(ngModel)]="createForm.instrumentId" name="instrumentId">
+          <option [ngValue]="0">Select instrument</option>
+          <option *ngFor="let instrument of instruments()" [ngValue]="instrument.id">{{ instrument.code }} · {{ instrument.name }}</option>
+        </select>
+      </label>
+      <label>
+        Study title
+        <input type="text" [(ngModel)]="createForm.title" name="title" placeholder="MSA title" />
+      </label>
+      <label>
+        Characteristic
+        <input type="text" [(ngModel)]="createForm.characteristic" name="characteristic" placeholder="Critical dimension" />
+      </label>
+      <label>
+        Method
+        <input type="text" [(ngModel)]="createForm.method" name="method" placeholder="Gauge/method" />
+      </label>
+      <label>
+        Owner
+        <input type="text" [(ngModel)]="createForm.ownerName" name="ownerName" placeholder="Owner" />
+      </label>
+      <label>
+        Tolerance min
+        <input type="number" [(ngModel)]="createForm.toleranceMin" name="toleranceMin" />
+      </label>
+      <label>
+        Tolerance max
+        <input type="number" [(ngModel)]="createForm.toleranceMax" name="toleranceMax" />
+      </label>
+      <label>
+        Resolution
+        <input type="number" [(ngModel)]="createForm.resolution" name="resolution" />
+      </label>
+      <label>
+        Reference value
+        <input type="number" [(ngModel)]="createForm.referenceValue" name="referenceValue" />
+      </label>
+      <label>
+        Due date
+        <input type="date" [(ngModel)]="createForm.dueDate" name="dueDate" />
+      </label>
+
+      <label *ngIf="createForm.studyType === 'GRR'">
+        Operators
+        <input type="number" min="1" [(ngModel)]="createForm.operatorsCount" name="operatorsCount" />
+      </label>
+      <label *ngIf="createForm.studyType === 'GRR'">
+        Parts
+        <input type="number" min="1" [(ngModel)]="createForm.partsCount" name="partsCount" />
+      </label>
+      <label *ngIf="createForm.studyType === 'GRR'">
+        Trials
+        <input type="number" min="1" [(ngModel)]="createForm.trialsCount" name="trialsCount" />
+      </label>
+      <label *ngIf="createForm.studyType === 'GRR'">
+        GRR design
+        <select [(ngModel)]="createForm.grrDesignType" name="grrDesignType">
+          <option value="Crossed">Crossed</option>
+          <option value="Nested">Nested</option>
+        </select>
+      </label>
+    </div>
+    <div class="card-actions">
+      <button class="primary" type="button" (click)="createStudy()" [disabled]="!createForm.title.trim()">Create MSA study</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head register-head">
+      <h2>Study register</h2>
+      <div class="filters">
+        <label>
+          Type
+          <select [ngModel]="activeStudyType()" (ngModelChange)="setTypeFilter($event)">
+            <option value="All">All</option>
+            <option *ngFor="let option of studyTypeOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select [ngModel]="activeStatus()" (ngModelChange)="setStatusFilter($event)">
+            <option value="All">All</option>
+            <option *ngFor="let option of studyStatusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="list" *ngIf="filteredStudies().length; else noStudies">
+      <article class="item" *ngFor="let study of filteredStudies()" [class.selected]="selectedStudy?.id === study.id">
+        <div class="item-main">
+          <p class="code">{{ study.code }} · {{ study.studyType }} · {{ study.status }}</p>
+          <h3>{{ study.title }}</h3>
+          <p>
+            {{ study.instrumentCode || 'No instrument' }}
+            {{ study.instrumentName ? ('· ' + study.instrumentName) : '' }}
+            · Owner: {{ study.ownerName || 'N/A' }}
+            · Latest: {{ study.latestResult || 'N/A' }}
+          </p>
+        </div>
+        <button class="ghost" type="button" (click)="openStudy(study)">Open</button>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="selectedStudy as study">
+    <div class="panel-head">
+      <h2>{{ study.code }} · {{ study.title }}</h2>
+      <div class="card-actions">
+        <button class="ghost" type="button" (click)="calculateStudy()" [disabled]="calculating">
+          {{ calculating ? 'Calculating...' : 'Calculate' }}
+        </button>
+        <button class="ghost" type="button" (click)="rejectStudy()">Reject</button>
+        <button class="primary" type="button" (click)="approveStudy()">Approve</button>
+      </div>
+    </div>
+
+    <p class="info" *ngIf="decisionNote">{{ decisionNote }}</p>
+
+    <div class="detail-grid">
+      <section class="card">
+        <h3>Add measurement</h3>
+        <div class="form-grid single">
+          <label>
+            Operator
+            <input type="text" [(ngModel)]="measurementForm.operatorName" name="measurementOperator" />
+          </label>
+          <label>
+            Part
+            <input type="text" [(ngModel)]="measurementForm.partName" name="measurementPart" />
+          </label>
+          <label>
+            Trial
+            <input type="number" min="1" [(ngModel)]="measurementForm.trialNo" name="measurementTrial" />
+          </label>
+          <label>
+            Measured value
+            <input type="number" [(ngModel)]="measurementForm.measuredValue" name="measurementValue" />
+          </label>
+          <label>
+            Reference value
+            <input type="number" [(ngModel)]="measurementForm.referenceValue" name="measurementReference" />
+          </label>
+          <label>
+            Measured at
+            <input type="datetime-local" [(ngModel)]="measurementForm.measuredAt" name="measurementDate" />
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="primary" type="button" (click)="addMeasurement()" [disabled]="!measurementForm.measuredValue">Add measurement</button>
+        </div>
+
+        <div class="table-wrap" *ngIf="measurements.length">
+          <table>
+            <thead>
+              <tr>
+                <th>Operator</th>
+                <th>Part</th>
+                <th>Trial</th>
+                <th>Measured</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of measurements">
+                <td>{{ row.operatorName || '—' }}</td>
+                <td>{{ row.partName || '—' }}</td>
+                <td>{{ row.trialNo || '—' }}</td>
+                <td>{{ row.measuredValue }}</td>
+                <td>{{ row.referenceValue ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Latest result</h3>
+        <div *ngIf="latestResult() as result; else noResult">
+          <p class="badge" [class.pass]="result.passFail === 'Pass'" [class.fail]="result.passFail === 'Fail'">
+            {{ result.passFail }} · {{ result.resultType }}
+          </p>
+          <p>{{ result.recommendation }}</p>
+          <div class="metrics" *ngIf="metricRows().length">
+            <article class="metric" *ngFor="let metric of metricRows()">
+              <span>{{ metric.key }}</span>
+              <strong>{{ metric.value }}</strong>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Actions</h3>
+        <div class="form-grid single">
+          <label>
+            Action type
+            <input type="text" [(ngModel)]="actionForm.actionType" name="actionType" />
+          </label>
+          <label>
+            Description
+            <textarea rows="2" [(ngModel)]="actionForm.description" name="actionDescription"></textarea>
+          </label>
+          <label>
+            Owner
+            <input type="text" [(ngModel)]="actionForm.ownerName" name="actionOwner" />
+          </label>
+          <label>
+            Target date
+            <input type="date" [(ngModel)]="actionForm.targetDate" name="actionTargetDate" />
+          </label>
+          <label>
+            Status
+            <select [(ngModel)]="actionForm.status" name="actionStatus">
+              <option *ngFor="let option of actionStatusOptions" [value]="option">{{ option }}</option>
+            </select>
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="primary" type="button" (click)="createAction()" [disabled]="!actionForm.description.trim()">Create action</button>
+        </div>
+
+        <div class="list tight" *ngIf="actions.length">
+          <article class="item" *ngFor="let action of actions">
+            <div class="item-main">
+              <p class="code">{{ action.actionType }} · {{ action.status }}</p>
+              <p>{{ action.description }}</p>
+              <p>Owner: {{ action.ownerName || 'N/A' }} · Target: {{ action.targetDate || 'N/A' }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </section>
+</section>
+
+<ng-template #noStudies>
+  <div class="empty">No MSA studies found for selected filters.</div>
+</ng-template>
+
+<ng-template #noResult>
+  <p class="empty small">No result calculated yet.</p>
+</ng-template>

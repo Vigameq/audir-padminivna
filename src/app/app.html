@@ -160,6 +160,13 @@
           Instruments
         </a>
         <a
+          routerLink="/msa"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Customer'"
+        >
+          MSA
+        </a>
+        <a
           routerLink="/supplier-management"
           routerLinkActive="active"
           *ngIf="auth.role() !== 'Customer'"

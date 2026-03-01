@@ -623,6 +623,11 @@ const generateSupplierCode = () => {
   return `SUP-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
 };
 
+const generateMsaCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `MSA-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
+};
+
 type ComplaintEscalationRule = {
   level: number;
   thresholdHours: number;
@@ -2658,6 +2663,861 @@ router.get('/supplier-dashboard', requireAuth, async (req: AuthedRequest, res) =
       bucket_gt_30: 0,
     },
   });
+});
+
+const avg = (values: number[]) => {
+  if (!values.length) {
+    return 0;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+const stdDevSample = (values: number[]) => {
+  if (values.length < 2) {
+    return 0;
+  }
+  const mean = avg(values);
+  const variance = values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / (values.length - 1);
+  return Math.sqrt(Math.max(variance, 0));
+};
+
+const toStudyStatus = (value: unknown) => String(value ?? '').trim();
+
+const getMsaStudyForTenant = async (tenantId: number, studyId: number) => {
+  const studyResult = await pool.query(
+    `SELECT s.id, s.code, s.study_type, s.title, s.characteristic, s.method, s.design_type,
+            s.tolerance_min, s.tolerance_max, s.resolution, s.reference_value, s.owner_name,
+            s.due_date, s.status, s.review_notes, s.instrument_id, s.created_at, s.updated_at,
+            i.code AS instrument_code, i.name AS instrument_name
+     FROM msa_studies s
+     LEFT JOIN instruments i ON i.id = s.instrument_id AND i.tenant_id = s.tenant_id
+     WHERE s.id = $1 AND s.tenant_id = $2`,
+    [studyId, tenantId]
+  );
+  return studyResult.rows[0] ?? null;
+};
+
+const computeToleranceSpan = (study: any) => {
+  const min = Number(study?.tolerance_min);
+  const max = Number(study?.tolerance_max);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return 0;
+  }
+  return Math.max(0, max - min);
+};
+
+router.get('/msa/studies', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const studyType = String(req.query.study_type ?? '').trim();
+  const status = String(req.query.status ?? '').trim();
+
+  const whereParts = ['s.tenant_id = $1'];
+  const params: unknown[] = [tenantId];
+  if (studyType) {
+    params.push(studyType);
+    whereParts.push(`s.study_type = $${params.length}`);
+  }
+  if (status) {
+    params.push(status);
+    whereParts.push(`s.status = $${params.length}`);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT s.id, s.code, s.study_type, s.title, s.characteristic, s.method, s.design_type,
+            s.tolerance_min, s.tolerance_max, s.resolution, s.reference_value, s.owner_name,
+            s.due_date, s.status, s.review_notes, s.instrument_id, s.created_at, s.updated_at,
+            i.code AS instrument_code, i.name AS instrument_name,
+            r.pass_fail AS latest_result, r.calculated_at AS latest_result_at
+     FROM msa_studies s
+     LEFT JOIN instruments i ON i.id = s.instrument_id AND i.tenant_id = s.tenant_id
+     LEFT JOIN LATERAL (
+       SELECT pass_fail, calculated_at
+       FROM msa_results
+       WHERE tenant_id = s.tenant_id AND study_id = s.id
+       ORDER BY calculated_at DESC
+       LIMIT 1
+     ) r ON TRUE
+     WHERE ${whereParts.join(' AND ')}
+     ORDER BY s.created_at DESC`,
+    params
+  );
+  return res.json(rows);
+});
+
+router.post('/msa/studies', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const payload = req.body ?? {};
+  const studyType = String(payload.study_type ?? '').trim();
+  const title = String(payload.title ?? '').trim();
+  const status = toStudyStatus(payload.status || 'Draft') || 'Draft';
+  if (!['GRR', 'Bias', 'Linearity', 'Stability'].includes(studyType)) {
+    return res.status(400).json({ detail: 'Invalid study_type' });
+  }
+  if (!title) {
+    return res.status(400).json({ detail: 'title is required' });
+  }
+  if (!['Draft', 'Data Collection', 'Calculated', 'Under Review', 'Approved', 'Rejected', 'Closed'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+  const instrumentId = payload.instrument_id ? Number(payload.instrument_id) : null;
+  if (instrumentId) {
+    const instrumentResult = await pool.query(
+      `SELECT 1 FROM instruments WHERE id = $1 AND tenant_id = $2`,
+      [instrumentId, tenantId]
+    );
+    if (!instrumentResult.rows.length) {
+      return res.status(400).json({ detail: 'Invalid instrument_id' });
+    }
+  }
+
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = generateMsaCode();
+    const exists = await pool.query(
+      'SELECT 1 FROM msa_studies WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+      [tenantId, code]
+    );
+    if (!exists.rows.length) {
+      break;
+    }
+    code = '';
+  }
+  if (!code) {
+    return res.status(500).json({ detail: 'Unable to generate study code' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO msa_studies
+      (tenant_id, code, instrument_id, study_type, title, characteristic, method, design_type,
+       tolerance_min, tolerance_max, resolution, reference_value, owner_name, due_date,
+       status, review_notes, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15, $16, $17, NOW(), NOW())
+     RETURNING id`,
+    [
+      tenantId,
+      code,
+      instrumentId,
+      studyType,
+      title,
+      payload.characteristic ?? null,
+      payload.method ?? null,
+      payload.design_type ?? null,
+      payload.tolerance_min ?? null,
+      payload.tolerance_max ?? null,
+      payload.resolution ?? null,
+      payload.reference_value ?? null,
+      payload.owner_name ?? null,
+      payload.due_date ?? null,
+      status,
+      payload.review_notes ?? null,
+      userId,
+    ]
+  );
+  const studyId = Number(rows[0].id);
+
+  if (studyType === 'GRR') {
+    const grr = payload.grr_design ?? {};
+    const operatorsCount = Math.max(1, Math.floor(Number(grr.operators_count ?? 3)));
+    const partsCount = Math.max(1, Math.floor(Number(grr.parts_count ?? 10)));
+    const trialsCount = Math.max(1, Math.floor(Number(grr.trials_count ?? 2)));
+    const designType = String(grr.design_type ?? 'Crossed');
+    const randomized = Boolean(grr.randomized ?? true);
+    if (!['Crossed', 'Nested'].includes(designType)) {
+      return res.status(400).json({ detail: 'Invalid grr design_type' });
+    }
+    await pool.query(
+      `INSERT INTO msa_grr_design
+        (tenant_id, study_id, operators_count, parts_count, trials_count, design_type, randomized, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+      [tenantId, studyId, operatorsCount, partsCount, trialsCount, designType, randomized]
+    );
+  }
+
+  const createdStudy = await getMsaStudyForTenant(tenantId, studyId);
+  return res.status(201).json(createdStudy);
+});
+
+router.put('/msa/studies/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['instrument_id', payload.instrument_id],
+    ['study_type', payload.study_type],
+    ['title', payload.title],
+    ['characteristic', payload.characteristic],
+    ['method', payload.method],
+    ['design_type', payload.design_type],
+    ['tolerance_min', payload.tolerance_min],
+    ['tolerance_max', payload.tolerance_max],
+    ['resolution', payload.resolution],
+    ['reference_value', payload.reference_value],
+    ['owner_name', payload.owner_name],
+    ['due_date', payload.due_date],
+    ['status', payload.status],
+    ['review_notes', payload.review_notes],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length && payload.grr_design === undefined) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+
+  const studyType = fields.find(([field]) => field === 'study_type')?.[1];
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  const instrumentId = fields.find(([field]) => field === 'instrument_id')?.[1];
+  if (
+    studyType !== undefined &&
+    !['GRR', 'Bias', 'Linearity', 'Stability'].includes(String(studyType))
+  ) {
+    return res.status(400).json({ detail: 'Invalid study_type' });
+  }
+  if (
+    status !== undefined &&
+    !['Draft', 'Data Collection', 'Calculated', 'Under Review', 'Approved', 'Rejected', 'Closed']
+      .includes(String(status))
+  ) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+  if (instrumentId !== undefined && instrumentId !== null) {
+    const instrumentQuery = await pool.query(
+      'SELECT 1 FROM instruments WHERE id = $1 AND tenant_id = $2',
+      [Number(instrumentId), tenantId]
+    );
+    if (!instrumentQuery.rows.length) {
+      return res.status(400).json({ detail: 'Invalid instrument_id' });
+    }
+  }
+
+  if (fields.length) {
+    const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+    const values = fields.map(([, value]) => value);
+    const updateResult = await pool.query(
+      `UPDATE msa_studies
+       SET ${setClause}, updated_at = NOW()
+       WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+       RETURNING id`,
+      [...values, studyId, tenantId]
+    );
+    if (!updateResult.rows.length) {
+      return res.status(404).json({ detail: 'Study not found' });
+    }
+  } else {
+    const exists = await getMsaStudyForTenant(tenantId, studyId);
+    if (!exists) {
+      return res.status(404).json({ detail: 'Study not found' });
+    }
+  }
+
+  if (payload.grr_design !== undefined) {
+    const grr = payload.grr_design ?? {};
+    const operatorsCount = Math.max(1, Math.floor(Number(grr.operators_count ?? 3)));
+    const partsCount = Math.max(1, Math.floor(Number(grr.parts_count ?? 10)));
+    const trialsCount = Math.max(1, Math.floor(Number(grr.trials_count ?? 2)));
+    const designType = String(grr.design_type ?? 'Crossed').trim();
+    const randomized = Boolean(grr.randomized ?? true);
+    if (!['Crossed', 'Nested'].includes(designType)) {
+      return res.status(400).json({ detail: 'Invalid grr design_type' });
+    }
+    await pool.query(
+      `INSERT INTO msa_grr_design
+        (tenant_id, study_id, operators_count, parts_count, trials_count, design_type, randomized, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+       ON CONFLICT (study_id)
+       DO UPDATE SET
+         operators_count = EXCLUDED.operators_count,
+         parts_count = EXCLUDED.parts_count,
+         trials_count = EXCLUDED.trials_count,
+         design_type = EXCLUDED.design_type,
+         randomized = EXCLUDED.randomized,
+         updated_at = NOW()`,
+      [tenantId, studyId, operatorsCount, partsCount, trialsCount, designType, randomized]
+    );
+  }
+
+  const updatedStudy = await getMsaStudyForTenant(tenantId, studyId);
+  return res.json(updatedStudy);
+});
+
+router.get('/msa/studies/:id/measurements', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, study_id, operator_name, part_name, trial_no, measured_value, reference_value, measured_at, created_at
+     FROM msa_measurements
+     WHERE tenant_id = $1 AND study_id = $2
+     ORDER BY created_at ASC`,
+    [tenantId, studyId]
+  );
+  return res.json(rows);
+});
+
+router.post('/msa/studies/:id/measurements', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+
+  const payload = req.body ?? {};
+  const rawRows = Array.isArray(payload.rows) ? payload.rows : [payload];
+  const sanitizedRows = rawRows
+    .map((row: any) => ({
+      operator_name: String(row?.operator_name ?? '').trim() || null,
+      part_name: String(row?.part_name ?? '').trim() || null,
+      trial_no: row?.trial_no === undefined || row?.trial_no === null ? null : Number(row.trial_no),
+      measured_value: Number(row?.measured_value),
+      reference_value: row?.reference_value === undefined || row?.reference_value === null || row?.reference_value === ''
+        ? null
+        : Number(row.reference_value),
+      measured_at: row?.measured_at ? String(row.measured_at) : null,
+    }))
+    .filter((row: any) => Number.isFinite(row.measured_value));
+
+  if (!sanitizedRows.length) {
+    return res.status(400).json({ detail: 'No valid measurements provided' });
+  }
+
+  const inserted: any[] = [];
+  for (const row of sanitizedRows) {
+    const insertResult = await pool.query(
+      `INSERT INTO msa_measurements
+        (tenant_id, study_id, operator_name, part_name, trial_no, measured_value, reference_value, measured_at, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()), $9, NOW())
+       RETURNING id, study_id, operator_name, part_name, trial_no, measured_value, reference_value, measured_at, created_at`,
+      [
+        tenantId,
+        studyId,
+        row.operator_name,
+        row.part_name,
+        row.trial_no,
+        row.measured_value,
+        row.reference_value,
+        row.measured_at,
+        userId,
+      ]
+    );
+    inserted.push(insertResult.rows[0]);
+  }
+
+  if (study.status === 'Draft') {
+    await pool.query(
+      `UPDATE msa_studies
+       SET status = 'Data Collection', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2`,
+      [studyId, tenantId]
+    );
+  }
+
+  return res.status(201).json({ inserted_count: inserted.length, rows: inserted });
+});
+
+router.get('/msa/studies/:id/results', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+
+  const { rows } = await pool.query(
+    `SELECT id, study_id, result_type, metrics_json, pass_fail, recommendation,
+            calculated_by, calculated_at, approved_by, approved_at, created_at
+     FROM msa_results
+     WHERE tenant_id = $1 AND study_id = $2
+     ORDER BY calculated_at DESC`,
+    [tenantId, studyId]
+  );
+  return res.json(rows);
+});
+
+router.post('/msa/studies/:id/calculate', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+
+  const measurementResult = await pool.query(
+    `SELECT operator_name, part_name, trial_no, measured_value, reference_value, measured_at, created_at
+     FROM msa_measurements
+     WHERE tenant_id = $1 AND study_id = $2
+     ORDER BY measured_at ASC, created_at ASC`,
+    [tenantId, studyId]
+  );
+  const measurementRows = measurementResult.rows;
+  if (!measurementRows.length) {
+    return res.status(400).json({ detail: 'No measurements available for calculation' });
+  }
+
+  const studyType = String(study.study_type);
+  const toleranceSpan = computeToleranceSpan(study);
+  let metrics: Record<string, unknown> = {};
+  let passFail: 'Pass' | 'Conditional' | 'Fail' = 'Conditional';
+  let recommendation = 'Review study result and take action if needed.';
+
+  if (studyType === 'GRR') {
+    const designResult = await pool.query(
+      `SELECT operators_count, parts_count, trials_count, design_type, randomized
+       FROM msa_grr_design
+       WHERE tenant_id = $1 AND study_id = $2`,
+      [tenantId, studyId]
+    );
+    const design = designResult.rows[0] ?? {
+      operators_count: 3,
+      parts_count: 10,
+      trials_count: 2,
+      design_type: 'Crossed',
+      randomized: true,
+    };
+    const expectedSamples =
+      Number(design.operators_count) * Number(design.parts_count) * Number(design.trials_count);
+    if (measurementRows.length < expectedSamples) {
+      return res.status(400).json({
+        detail: 'Not enough samples for GRR calculation',
+        expected_samples: expectedSamples,
+        actual_samples: measurementRows.length,
+      });
+    }
+
+    const allValues = measurementRows.map((row) => Number(row.measured_value)).filter((value) => Number.isFinite(value));
+    const cellGroups = new Map<string, number[]>();
+    const operatorGroups = new Map<string, number[]>();
+    const partGroups = new Map<string, number[]>();
+
+    measurementRows.forEach((row) => {
+      const operator = String(row.operator_name ?? 'Unknown');
+      const part = String(row.part_name ?? 'Unknown');
+      const value = Number(row.measured_value);
+      if (!Number.isFinite(value)) {
+        return;
+      }
+      const cellKey = `${operator}::${part}`;
+      cellGroups.set(cellKey, [...(cellGroups.get(cellKey) ?? []), value]);
+      operatorGroups.set(operator, [...(operatorGroups.get(operator) ?? []), value]);
+      partGroups.set(part, [...(partGroups.get(part) ?? []), value]);
+    });
+
+    const repeatability = avg(
+      Array.from(cellGroups.values()).map((values) => stdDevSample(values)).filter((value) => value > 0)
+    );
+    const reproducibility = stdDevSample(
+      Array.from(operatorGroups.values()).map((values) => avg(values))
+    );
+    const partVariation = stdDevSample(
+      Array.from(partGroups.values()).map((values) => avg(values))
+    );
+    const totalVariation = stdDevSample(allValues);
+    const grrVariation = Math.sqrt((repeatability ** 2) + (reproducibility ** 2));
+    const grrPercent = totalVariation > 0 ? (grrVariation / totalVariation) * 100 : 0;
+    const partPercent = totalVariation > 0 ? (partVariation / totalVariation) * 100 : 0;
+    const ndc = grrVariation > 0 ? (1.41 * (partVariation / grrVariation)) : 0;
+
+    if (grrPercent < 10) {
+      passFail = 'Pass';
+      recommendation = 'GRR acceptable (<10%). System is suitable for release.';
+    } else if (grrPercent <= 30) {
+      passFail = 'Conditional';
+      recommendation = 'GRR between 10% and 30%. Use conditionally and improve measurement process.';
+    } else {
+      passFail = 'Fail';
+      recommendation = 'GRR >30%. Measurement system not acceptable; containment and corrective action required.';
+    }
+
+    metrics = {
+      study_type: 'GRR',
+      expected_samples: expectedSamples,
+      sample_count: measurementRows.length,
+      repeatability_ev: repeatability,
+      reproducibility_av: reproducibility,
+      grr_variation: grrVariation,
+      total_variation_tv: totalVariation,
+      part_variation_pv: partVariation,
+      grr_percent: grrPercent,
+      pv_percent: partPercent,
+      ndc,
+      design,
+    };
+  } else if (studyType === 'Bias') {
+    const defaultReference = study.reference_value !== null ? Number(study.reference_value) : null;
+    const biasValues = measurementRows
+      .map((row) => {
+        const reference = row.reference_value !== null && row.reference_value !== undefined
+          ? Number(row.reference_value)
+          : defaultReference;
+        const measured = Number(row.measured_value);
+        if (!Number.isFinite(measured) || reference === null || !Number.isFinite(reference)) {
+          return null;
+        }
+        return measured - reference;
+      })
+      .filter((value) => value !== null) as number[];
+
+    if (biasValues.length < 10) {
+      return res.status(400).json({
+        detail: 'Bias study needs at least 10 valid measurements with reference values',
+        actual_samples: biasValues.length,
+      });
+    }
+
+    const meanBias = avg(biasValues);
+    const sigma = stdDevSample(biasValues);
+    const tStatistic = sigma > 0 ? (meanBias / (sigma / Math.sqrt(biasValues.length))) : 0;
+    const biasPctTolerance = toleranceSpan > 0 ? (Math.abs(meanBias) / toleranceSpan) * 100 : null;
+
+    if (biasPctTolerance !== null && biasPctTolerance <= 10) {
+      passFail = 'Pass';
+      recommendation = 'Bias within 10% of tolerance. System acceptable.';
+    } else if (biasPctTolerance !== null && biasPctTolerance <= 30) {
+      passFail = 'Conditional';
+      recommendation = 'Bias moderate. Keep under monitoring and verify fixture/setup.';
+    } else {
+      passFail = 'Fail';
+      recommendation = 'Bias exceeds acceptable limits. Recalibration and corrective action required.';
+    }
+
+    metrics = {
+      study_type: 'Bias',
+      sample_count: biasValues.length,
+      mean_bias: meanBias,
+      stddev_bias: sigma,
+      t_statistic: tStatistic,
+      tolerance_span: toleranceSpan || null,
+      bias_pct_tolerance: biasPctTolerance,
+    };
+  } else if (studyType === 'Linearity') {
+    const points = measurementRows
+      .map((row) => {
+        const reference = row.reference_value !== null && row.reference_value !== undefined
+          ? Number(row.reference_value)
+          : null;
+        const measured = Number(row.measured_value);
+        if (!Number.isFinite(measured) || reference === null || !Number.isFinite(reference)) {
+          return null;
+        }
+        return { x: reference, y: measured - reference };
+      })
+      .filter((point) => point !== null) as { x: number; y: number }[];
+
+    const distinctReferenceCount = new Set(points.map((point) => point.x.toFixed(6))).size;
+    if (points.length < 15 || distinctReferenceCount < 5) {
+      return res.status(400).json({
+        detail: 'Linearity requires at least 15 points and 5 distinct reference levels',
+        actual_samples: points.length,
+        distinct_reference_levels: distinctReferenceCount,
+      });
+    }
+
+    const n = points.length;
+    const sumX = points.reduce((sum, point) => sum + point.x, 0);
+    const sumY = points.reduce((sum, point) => sum + point.y, 0);
+    const sumXY = points.reduce((sum, point) => sum + (point.x * point.y), 0);
+    const sumX2 = points.reduce((sum, point) => sum + (point.x ** 2), 0);
+    const denominator = (n * sumX2) - (sumX ** 2);
+    const slope = denominator !== 0 ? ((n * sumXY) - (sumX * sumY)) / denominator : 0;
+    const intercept = n > 0 ? ((sumY - (slope * sumX)) / n) : 0;
+    const avgAbsBias = avg(points.map((point) => Math.abs(point.y)));
+    const avgBiasPctTolerance = toleranceSpan > 0 ? (avgAbsBias / toleranceSpan) * 100 : null;
+
+    if (Math.abs(slope) <= 0.1 && (avgBiasPctTolerance === null || avgBiasPctTolerance <= 10)) {
+      passFail = 'Pass';
+      recommendation = 'Linearity slope and average bias are within acceptance.';
+    } else if (Math.abs(slope) <= 0.2 && (avgBiasPctTolerance === null || avgBiasPctTolerance <= 30)) {
+      passFail = 'Conditional';
+      recommendation = 'Linearity is marginal. Apply correction factor and monitor.';
+    } else {
+      passFail = 'Fail';
+      recommendation = 'Linearity unacceptable. Investigate sensor/range non-linearity.';
+    }
+
+    metrics = {
+      study_type: 'Linearity',
+      sample_count: points.length,
+      distinct_reference_levels: distinctReferenceCount,
+      slope,
+      intercept,
+      avg_abs_bias: avgAbsBias,
+      tolerance_span: toleranceSpan || null,
+      avg_bias_pct_tolerance: avgBiasPctTolerance,
+    };
+  } else if (studyType === 'Stability') {
+    const values = measurementRows
+      .map((row) => Number(row.measured_value))
+      .filter((value) => Number.isFinite(value));
+    if (values.length < 20) {
+      return res.status(400).json({
+        detail: 'Stability study needs at least 20 measurements',
+        actual_samples: values.length,
+      });
+    }
+
+    const mean = avg(values);
+    const sigma = stdDevSample(values);
+    const outOfControl = sigma > 0
+      ? values.filter((value) => Math.abs(value - mean) > (3 * sigma)).length
+      : 0;
+
+    const n = values.length;
+    const xValues = Array.from({ length: n }, (_value, index) => index + 1);
+    const sumX = xValues.reduce((sum, value) => sum + value, 0);
+    const sumY = values.reduce((sum, value) => sum + value, 0);
+    const sumXY = values.reduce((sum, value, index) => sum + (value * xValues[index]), 0);
+    const sumX2 = xValues.reduce((sum, value) => sum + (value ** 2), 0);
+    const denominator = (n * sumX2) - (sumX ** 2);
+    const driftSlope = denominator !== 0 ? ((n * sumXY) - (sumX * sumY)) / denominator : 0;
+    const driftPctTolerance = toleranceSpan > 0 ? (Math.abs(driftSlope) / toleranceSpan) * 100 : null;
+
+    if (outOfControl === 0 && (driftPctTolerance === null || driftPctTolerance <= 1)) {
+      passFail = 'Pass';
+      recommendation = 'Stability is acceptable with no out-of-control points.';
+    } else if (outOfControl <= 2 && (driftPctTolerance === null || driftPctTolerance <= 3)) {
+      passFail = 'Conditional';
+      recommendation = 'Stability has mild drift. Increase monitoring frequency.';
+    } else {
+      passFail = 'Fail';
+      recommendation = 'Stability failed. Investigate drift and recalibrate immediately.';
+    }
+
+    metrics = {
+      study_type: 'Stability',
+      sample_count: values.length,
+      mean,
+      stddev: sigma,
+      out_of_control_count: outOfControl,
+      drift_slope_per_sample: driftSlope,
+      tolerance_span: toleranceSpan || null,
+      drift_pct_tolerance: driftPctTolerance,
+    };
+  } else {
+    return res.status(400).json({ detail: 'Unsupported study_type' });
+  }
+
+  const resultInsert = await pool.query(
+    `INSERT INTO msa_results
+      (tenant_id, study_id, result_type, metrics_json, pass_fail, recommendation, calculated_by, calculated_at, created_at)
+     VALUES
+      ($1, $2, $3, $4::jsonb, $5, $6, $7, NOW(), NOW())
+     RETURNING id, study_id, result_type, metrics_json, pass_fail, recommendation,
+               calculated_by, calculated_at, approved_by, approved_at, created_at`,
+    [tenantId, studyId, studyType, JSON.stringify(metrics), passFail, recommendation, userId]
+  );
+  const latestResult = resultInsert.rows[0];
+
+  await pool.query(
+    `UPDATE msa_studies
+     SET status = 'Calculated', updated_at = NOW()
+     WHERE id = $1 AND tenant_id = $2`,
+    [studyId, tenantId]
+  );
+
+  let autoActionId: number | null = null;
+  if (passFail === 'Fail') {
+    const actionInsert = await pool.query(
+      `INSERT INTO msa_actions
+        (tenant_id, study_id, action_type, description, owner_name, target_date, status, created_by, created_at, updated_at)
+       VALUES
+        ($1, $2, 'MSA Failure', $3, $4, (CURRENT_DATE + INTERVAL '14 days')::date, 'Open', $5, NOW(), NOW())
+       RETURNING id`,
+      [
+        tenantId,
+        studyId,
+        `Auto-created: ${studyType} failed for study ${study.code}.`,
+        study.owner_name ?? null,
+        userId,
+      ]
+    );
+    autoActionId = Number(actionInsert.rows[0]?.id ?? 0) || null;
+  }
+
+  return res.json({
+    result: latestResult,
+    status: 'Calculated',
+    auto_action_id: autoActionId,
+  });
+});
+
+router.post('/msa/studies/:id/approve', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+  const latestResultQuery = await pool.query(
+    `SELECT id
+     FROM msa_results
+     WHERE tenant_id = $1 AND study_id = $2
+     ORDER BY calculated_at DESC
+     LIMIT 1`,
+    [tenantId, studyId]
+  );
+  const latestResult = latestResultQuery.rows[0];
+  if (!latestResult) {
+    return res.status(400).json({ detail: 'Study has no calculated result' });
+  }
+
+  await pool.query(
+    `UPDATE msa_studies
+     SET status = 'Approved', approved_by = $1, approved_at = NOW(), updated_at = NOW()
+     WHERE id = $2 AND tenant_id = $3`,
+    [userId, studyId, tenantId]
+  );
+  await pool.query(
+    `UPDATE msa_results
+     SET approved_by = $1, approved_at = NOW()
+     WHERE id = $2 AND tenant_id = $3`,
+    [userId, Number(latestResult.id), tenantId]
+  );
+
+  const updatedStudy = await getMsaStudyForTenant(tenantId, studyId);
+  return res.json({ detail: 'Approved', study: updatedStudy });
+});
+
+router.post('/msa/studies/:id/reject', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const reason = String(req.body?.reason ?? '').trim();
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+  await pool.query(
+    `UPDATE msa_studies
+     SET status = 'Rejected',
+         review_notes = $1,
+         approved_by = NULL,
+         approved_at = NULL,
+         updated_at = NOW()
+     WHERE id = $2 AND tenant_id = $3`,
+    [reason || 'Rejected during review', studyId, tenantId]
+  );
+  const updatedStudy = await getMsaStudyForTenant(tenantId, studyId);
+  return res.json({ detail: 'Rejected', study: updatedStudy });
+});
+
+router.get('/msa/studies/:id/actions', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, study_id, action_type, description, owner_name, target_date, status, linked_nc_id, created_at, updated_at
+     FROM msa_actions
+     WHERE tenant_id = $1 AND study_id = $2
+     ORDER BY created_at DESC`,
+    [tenantId, studyId]
+  );
+  return res.json(rows);
+});
+
+router.post('/msa/studies/:id/actions', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const studyId = Number(req.params.id);
+  if (!studyId) {
+    return res.status(400).json({ detail: 'Invalid study id' });
+  }
+  const study = await getMsaStudyForTenant(tenantId, studyId);
+  if (!study) {
+    return res.status(404).json({ detail: 'Study not found' });
+  }
+  const payload = req.body ?? {};
+  const description = String(payload.description ?? '').trim();
+  if (!description) {
+    return res.status(400).json({ detail: 'description is required' });
+  }
+  const status = String(payload.status ?? 'Open').trim();
+  if (!['Open', 'In Progress', 'Closed'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO msa_actions
+      (tenant_id, study_id, action_type, description, owner_name, target_date, status, linked_nc_id, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+     RETURNING id, study_id, action_type, description, owner_name, target_date, status, linked_nc_id, created_at, updated_at`,
+    [
+      tenantId,
+      studyId,
+      payload.action_type ?? 'MSA Action',
+      description,
+      payload.owner_name ?? null,
+      payload.target_date ?? null,
+      status,
+      payload.linked_nc_id ?? null,
+      userId,
+    ]
+  );
+  return res.status(201).json(rows[0]);
 });
 
 router.post('/audit-plans', requireAuth, async (req: AuthedRequest, res) => {

@@ -65,6 +65,12 @@ export const routes: Routes = [
     title: 'Instruments',
   },
   {
+    path: 'msa',
+    loadComponent: () =>
+      import('./pages/msa/msa').then((m) => m.Msa),
+    title: 'MSA',
+  },
+  {
     path: 'supplier-management',
     loadComponent: () =>
       import('./pages/supplier-management/supplier-management').then((m) => m.SupplierManagement),
