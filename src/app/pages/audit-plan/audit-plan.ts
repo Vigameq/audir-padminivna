@@ -257,8 +257,21 @@ export class AuditPlan implements OnInit {
     if (form.invalid) {
       return;
     }
+    const formatDate = (value: string) => {
+      if (!value) {
+        return '—';
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}-${month}-${year}`;
+    };
     this.successSummary = {
-      dateRange: `${this.auditForm.startDate} → ${this.auditForm.endDate}`,
+      dateRange: `${formatDate(this.auditForm.startDate)} → ${formatDate(this.auditForm.endDate)}`,
       auditType: this.auditForm.auditType,
       auditSubtype: this.auditForm.auditSubtype || '—',
     };

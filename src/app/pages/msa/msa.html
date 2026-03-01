@@ -250,7 +250,7 @@
             <div class="item-main">
               <p class="code">{{ action.actionType }} · {{ action.status }}</p>
               <p>{{ action.description }}</p>
-              <p>Owner: {{ action.ownerName || 'N/A' }} · Target: {{ action.targetDate || 'N/A' }}</p>
+              <p>Owner: {{ action.ownerName || 'N/A' }} · Target: {{ action.targetDate ? (action.targetDate | date:'dd-MM-yyyy') : 'N/A' }}</p>
             </div>
           </article>
         </div>

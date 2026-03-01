@@ -220,7 +220,7 @@
       <article class="item" *ngFor="let record of ppap()">
         <div class="item-main">
           <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.partNo }}</h3>
-          <p>{{ record.level }} · Submission: {{ record.submissionDate || '—' }} · Approved by: {{ record.approvedBy || '—' }}</p>
+          <p>{{ record.level }} · Submission: {{ record.submissionDate ? (record.submissionDate | date:'dd-MM-yyyy') : '—' }} · Approved by: {{ record.approvedBy || '—' }}</p>
         </div>
         <div class="item-actions">
           <select
@@ -275,7 +275,7 @@
     <div class="list" *ngIf="performance().length; else noPerformance">
       <article class="item" *ngFor="let record of performance()">
         <div class="item-main">
-          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.periodMonth }}</h3>
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.periodMonth ? (record.periodMonth | date:'dd-MM-yyyy') : '—' }}</h3>
           <p>Q: {{ record.qualityScore }} · D: {{ record.deliveryScore }} · S: {{ record.serviceScore }} · Total: {{ record.totalScore }}</p>
         </div>
       </article>
@@ -325,7 +325,7 @@
     <div class="list" *ngIf="ppm().length; else noPpm">
       <article class="item" *ngFor="let record of ppm()">
         <div class="item-main">
-          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.periodMonth }}</h3>
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.periodMonth ? (record.periodMonth | date:'dd-MM-yyyy') : '—' }}</h3>
           <p>Delivered: {{ record.deliveredQty }} · Defective: {{ record.defectiveQty }} · PPM: {{ record.ppm | number : '1.0-2' }}</p>
         </div>
       </article>
@@ -354,7 +354,7 @@
             <td>{{ row.avgPpm | number : '1.0-2' }}</td>
             <td>{{ row.avgTotalScore | number : '1.0-2' }}</td>
             <td>{{ row.riskIndex | number : '1.0-2' }}</td>
-            <td>{{ row.latestAuditStatus || 'N/A' }} {{ row.latestAuditDate ? ('· ' + row.latestAuditDate) : '' }}</td>
+            <td>{{ row.latestAuditStatus || 'N/A' }} {{ row.latestAuditDate ? ('· ' + (row.latestAuditDate | date:'dd-MM-yyyy')) : '' }}</td>
           </tr>
         </tbody>
       </table>
@@ -415,7 +415,7 @@
     <div class="list" *ngIf="audits().length; else noAudits">
       <article class="item" *ngFor="let record of audits()">
         <div class="item-main">
-          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.auditDate }}</h3>
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.auditDate ? (record.auditDate | date:'dd-MM-yyyy') : '—' }}</h3>
           <p>{{ record.auditType || 'Audit' }} · Auditor: {{ record.auditorName || 'N/A' }} · Score: {{ record.score || 0 }} · Owner: {{ record.actionOwner || 'N/A' }}</p>
         </div>
         <div class="item-actions">

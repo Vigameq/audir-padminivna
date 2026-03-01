@@ -100,7 +100,7 @@
         <div>
           <p class="code">{{ record.code }}</p>
           <h3>{{ record.title }}</h3>
-          <p class="meta">{{ record.complaintType }} · {{ record.category }} · {{ record.complaintDate || 'No date' }}</p>
+          <p class="meta">{{ record.complaintType }} · {{ record.category }} · {{ record.complaintDate ? (record.complaintDate | date:'dd-MM-yyyy') : 'No date' }}</p>
         </div>
         <span class="status" [class.closed]="record.status === 'Closed'" [class.inprogress]="record.status === 'In Progress'">{{ record.status }}</span>
       </div>

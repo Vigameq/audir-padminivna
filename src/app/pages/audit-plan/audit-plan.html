@@ -217,7 +217,7 @@
       <div class="summary-row">
         <span>Dates</span>
         <strong>
-          {{ auditForm.startDate || '—' }} → {{ auditForm.endDate || '—' }}
+          {{ auditForm.startDate ? (auditForm.startDate | date:'dd-MM-yyyy') : '—' }} → {{ auditForm.endDate ? (auditForm.endDate | date:'dd-MM-yyyy') : '—' }}
         </strong>
       </div>
       <div class="summary-row">

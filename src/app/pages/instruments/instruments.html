@@ -97,8 +97,8 @@
       </div>
       <div class="details">
         <span><strong>Frequency:</strong> {{ record.calibrationFrequencyDays }} days</span>
-        <span><strong>Last calibrated:</strong> {{ record.lastCalibratedAt || '—' }}</span>
-        <span><strong>Next due:</strong> {{ record.nextCalibrationDue || '—' }}</span>
+        <span><strong>Last calibrated:</strong> {{ record.lastCalibratedAt ? (record.lastCalibratedAt | date:'dd-MM-yyyy') : '—' }}</span>
+        <span><strong>Next due:</strong> {{ record.nextCalibrationDue ? (record.nextCalibrationDue | date:'dd-MM-yyyy') : '—' }}</span>
         <span><strong>Due state:</strong> {{ dueLabel(record) }}</span>
       </div>
 
@@ -176,8 +176,8 @@
           <div class="empty" *ngIf="loadingHistory">Loading...</div>
           <div class="empty" *ngIf="!loadingHistory && !calibrationHistory.length">No calibration records.</div>
           <article class="history-item" *ngFor="let item of calibrationHistory">
-            <span>{{ item.calibrationDate }} · {{ item.result }}</span>
-            <span>By: {{ item.calibratedBy || '—' }} · Cert: {{ item.certificateNo || '—' }} · Next due: {{ item.nextDueDate }}</span>
+            <span>{{ item.calibrationDate ? (item.calibrationDate | date:'dd-MM-yyyy') : '—' }} · {{ item.result }}</span>
+            <span>By: {{ item.calibratedBy || '—' }} · Cert: {{ item.certificateNo || '—' }} · Next due: {{ item.nextDueDate ? (item.nextDueDate | date:'dd-MM-yyyy') : '—' }}</span>
           </article>
         </div>
       </div>

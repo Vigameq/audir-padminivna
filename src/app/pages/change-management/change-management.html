@@ -118,7 +118,7 @@
           <h3>{{ record.title }}</h3>
           <p class="meta">
             4M: {{ record.fourMCategory }} · Risk: {{ record.riskLevel }} · Requested:
-            {{ record.requestedDate || 'No date' }}
+            {{ record.requestedDate ? (record.requestedDate | date:'dd-MM-yyyy') : 'No date' }}
           </p>
         </div>
         <span class="status">{{ record.status }}</span>
@@ -128,7 +128,7 @@
         <span><strong>Reason:</strong> {{ record.changeReason || '—' }}</span>
         <span><strong>Impact:</strong> {{ record.impactAssessment || '—' }}</span>
         <span><strong>Requested by:</strong> {{ record.requestedBy || '—' }}</span>
-        <span><strong>Target:</strong> {{ record.targetDate || '—' }}</span>
+        <span><strong>Target:</strong> {{ record.targetDate ? (record.targetDate | date:'dd-MM-yyyy') : '—' }}</span>
         <span><strong>Approved by:</strong> {{ record.approvedBy || '—' }}</span>
       </div>
 

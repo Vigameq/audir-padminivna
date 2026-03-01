@@ -114,7 +114,11 @@ export class Templates implements OnInit {
       this.createError = 'Import questions before creating a template.';
       return;
     }
-    const name = this.templateName.trim() || `Template ${new Date().toLocaleDateString()}`;
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const name = this.templateName.trim() || `Template ${day}-${month}-${year}`;
     this.templateService
       .createTemplateApi({
         name,
