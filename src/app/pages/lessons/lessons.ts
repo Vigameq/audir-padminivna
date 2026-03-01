@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -185,11 +186,28 @@ export class Lessons implements OnInit {
             },
           });
         },
-        error: () => {
+        error: (error: unknown) => {
           this.saving = false;
-          this.saveError = 'Unable to create lesson. Please try again.';
+          const detail = this.extractHttpDetail(error);
+          this.saveError = detail ? `Unable to create lesson. ${detail}` : 'Unable to create lesson. Please try again.';
         },
       });
+  }
+
+  private extractHttpDetail(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      const detail = error.error?.detail;
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail.trim();
+      }
+      if (typeof error.message === 'string' && error.message.trim()) {
+        return error.message.trim();
+      }
+    }
+    if (error instanceof Error && error.message.trim()) {
+      return error.message.trim();
+    }
+    return '';
   }
 
   protected startEdit(record: LessonRecord): void {

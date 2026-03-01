@@ -734,20 +734,29 @@ const logLessonEvent = async (payload: {
   newData?: unknown;
   createdBy?: number | null;
 }) => {
-  await pool.query(
-    `INSERT INTO lesson_events
-      (tenant_id, lesson_id, event_type, message, old_data, new_data, created_by, created_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, NOW())`,
-    [
-      payload.tenantId,
-      payload.lessonId,
-      payload.eventType,
-      payload.message ?? null,
-      payload.oldData ? JSON.stringify(payload.oldData) : null,
-      payload.newData ? JSON.stringify(payload.newData) : null,
-      payload.createdBy ?? null,
-    ]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO lesson_events
+        (tenant_id, lesson_id, event_type, message, old_data, new_data, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, NOW())`,
+      [
+        payload.tenantId,
+        payload.lessonId,
+        payload.eventType,
+        payload.message ?? null,
+        payload.oldData ? JSON.stringify(payload.oldData) : null,
+        payload.newData ? JSON.stringify(payload.newData) : null,
+        payload.createdBy ?? null,
+      ]
+    );
+  } catch (error) {
+    functions.logger.warn('Failed to write lesson event log', {
+      lessonId: payload.lessonId,
+      tenantId: payload.tenantId,
+      eventType: payload.eventType,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 const normalizeTags = (raw: unknown) => {

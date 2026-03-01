@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { catchError, forkJoin, of } from 'rxjs';
 import { InstrumentService } from '../../services/instrument.service';
 import {
   MsaAction,
@@ -104,15 +105,44 @@ export class Msa implements OnInit {
   protected refresh(): void {
     this.loading = true;
     this.error = '';
-    forkJoin([this.msaService.listStudies(), this.instrumentService.listInstruments()]).subscribe({
+    forkJoin([
+      this.msaService.listStudies(),
+      this.instrumentService.listInstruments().pipe(
+        catchError(() => of([]))
+      ),
+    ]).subscribe({
       next: () => {
         this.loading = false;
       },
-      error: () => {
+      error: (error: unknown) => {
         this.loading = false;
-        this.error = 'Unable to load MSA workspace.';
+        this.error = this.toWorkspaceLoadError(error);
       },
     });
+  }
+
+  private toWorkspaceLoadError(error: unknown): string {
+    const detail = this.extractHttpDetail(error).toLowerCase();
+    if (detail.includes('relation') && detail.includes('msa_')) {
+      return 'Unable to load MSA workspace. Database migration 018 is not applied.';
+    }
+    return 'Unable to load MSA workspace.';
+  }
+
+  private extractHttpDetail(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      const detail = error.error?.detail;
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail.trim();
+      }
+      if (typeof error.message === 'string' && error.message.trim()) {
+        return error.message.trim();
+      }
+    }
+    if (error instanceof Error && error.message.trim()) {
+      return error.message.trim();
+    }
+    return '';
   }
 
   protected setTypeFilter(value: 'All' | MsaStudyType): void {
