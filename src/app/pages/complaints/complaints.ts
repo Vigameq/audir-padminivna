@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
   ComplaintCategory,
   ComplaintEscalationStatus,
@@ -12,7 +13,7 @@ import {
 
 @Component({
   selector: 'app-complaints',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './complaints.html',
   styleUrl: './complaints.scss',
 })

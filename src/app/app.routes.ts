@@ -53,6 +53,24 @@ export const routes: Routes = [
     title: 'Change Management',
   },
   {
+    path: 'lessons',
+    loadComponent: () =>
+      import('./pages/lessons/lessons').then((m) => m.Lessons),
+    title: 'Lessons Learnt',
+  },
+  {
+    path: 'instruments',
+    loadComponent: () =>
+      import('./pages/instruments/instruments').then((m) => m.Instruments),
+    title: 'Instruments',
+  },
+  {
+    path: 'supplier-management',
+    loadComponent: () =>
+      import('./pages/supplier-management/supplier-management').then((m) => m.SupplierManagement),
+    title: 'Supplier Management',
+  },
+  {
     path: 'reports',
     loadComponent: () => import('./pages/reports/reports').then((m) => m.Reports),
     title: 'Reports',

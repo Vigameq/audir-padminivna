@@ -136,6 +136,13 @@
 
       <div class="card-actions" *ngIf="!hasEditDraft(record.id)">
         <button class="ghost small" type="button" (click)="startEdit(record)">Update</button>
+        <a
+          class="ghost small link-button"
+          [routerLink]="['/lessons']"
+          [queryParams]="{ source_type: 'Complaint', source_ref: record.code, title: record.title }"
+        >
+          Create lesson
+        </a>
       </div>
       <div class="card-actions" *ngIf="hasEditDraft(record.id)">
         <button class="primary small" type="button" (click)="saveComplaint(record)">Save</button>

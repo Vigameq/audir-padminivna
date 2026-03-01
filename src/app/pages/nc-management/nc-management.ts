@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthState } from '../../auth-state';
 import { NcRecord, NcService } from '../../services/nc.service';
 import { DepartmentService } from '../../services/department.service';
@@ -9,7 +9,7 @@ import { User, UserService } from '../../services/user.service';
 
 @Component({
   selector: 'app-nc-management',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nc-management.html',
   styleUrl: './nc-management.scss',
 })

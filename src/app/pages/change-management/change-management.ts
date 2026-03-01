@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
   ChangeRecord,
   ChangeRequestType,
@@ -12,7 +13,7 @@ import {
 
 @Component({
   selector: 'app-change-management',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './change-management.html',
   styleUrl: './change-management.scss',
 })

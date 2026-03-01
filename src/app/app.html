@@ -1,94 +1,12 @@
 <header class="app-header">
-  <div class="brand">
-    <div class="brand-copy">
-      <div class="brand-name">Padmini Mechatronics - AuditX</div>
-      <div class="brand-subtitle">Padmini Quality & Compliance Workspace</div>
+  <div class="header-top">
+    <div class="brand">
+      <div class="brand-copy">
+        <div class="brand-name">Padmini Mechatronics - AuditX</div>
+        <div class="brand-subtitle">Padmini Quality & Compliance Workspace</div>
+      </div>
     </div>
-  </div>
-  <div class="nav-shell" *ngIf="showNav">
-    <div class="nav-surface">
-      <nav class="app-nav">
-        <a
-          routerLink="/dashboard"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
-        >
-          Dashboard
-        </a>
-        <a
-          routerLink="/customer-dashboard"
-          routerLinkActive="active"
-          *ngIf="auth.role() === 'Customer'"
-        >
-          Customer
-        </a>
-        <a
-          routerLink="/audit-plan"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
-        >
-          Plan
-        </a>
-        <a
-          routerLink="/audit-manage"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
-        >
-          Manage
-        </a>
-        <a
-          routerLink="/audit-perform"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
-        >
-          Perform
-        </a>
-        <a
-          routerLink="/nc-management"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
-        >
-          NC Management
-        </a>
-        <a
-          routerLink="/complaints"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
-        >
-          Complaints
-        </a>
-        <a
-          routerLink="/change-management"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Customer'"
-        >
-          Change Management
-        </a>
-        <a
-          routerLink="/templates"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"
-        >
-          Templates
-        </a>
-        <a routerLink="/reports" routerLinkActive="active">Reports</a>
-        <a
-          routerLink="/user-management"
-          routerLinkActive="active"
-          *ngIf="auth.role() !== 'Manager' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"
-        >
-          User Management
-        </a>
-        <a
-          routerLink="/settings"
-          routerLinkActive="active"
-          *ngIf="auth.role() === 'Super Admin'"
-        >
-          Settings
-        </a>
-      </nav>
-    </div>
-    <div class="header-actions" *ngIf="auth.isLoggedIn()">
+    <div class="header-actions" *ngIf="showNav && auth.isLoggedIn()">
       <div class="notify-menu" #notifyMenu>
         <button
           class="notify-button"
@@ -166,6 +84,111 @@
           <button class="logout" type="button" (click)="logout()">Logout</button>
         </div>
       </div>
+    </div>
+  </div>
+  <div class="nav-shell" *ngIf="showNav">
+    <div class="nav-surface">
+      <nav class="app-nav">
+        <a
+          routerLink="/dashboard"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Dashboard
+        </a>
+        <a
+          routerLink="/customer-dashboard"
+          routerLinkActive="active"
+          *ngIf="auth.role() === 'Customer'"
+        >
+          Customer
+        </a>
+        <a
+          routerLink="/audit-plan"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Plan
+        </a>
+        <a
+          routerLink="/audit-manage"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Manage
+        </a>
+        <a
+          routerLink="/audit-perform"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Perform
+        </a>
+        <a
+          routerLink="/nc-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          NC Management
+        </a>
+        <a
+          routerLink="/complaints"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Customer'"
+        >
+          Complaints
+        </a>
+        <a
+          routerLink="/change-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Customer'"
+        >
+          Change Management
+        </a>
+        <a
+          routerLink="/lessons"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Customer'"
+        >
+          Lessons
+        </a>
+        <a
+          routerLink="/instruments"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Customer'"
+        >
+          Instruments
+        </a>
+        <a
+          routerLink="/supplier-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Customer'"
+        >
+          Suppliers
+        </a>
+        <a
+          routerLink="/templates"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Super Admin' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"
+        >
+          Templates
+        </a>
+        <a routerLink="/reports" routerLinkActive="active">Reports</a>
+        <a
+          routerLink="/user-management"
+          routerLinkActive="active"
+          *ngIf="auth.role() !== 'Manager' && auth.role() !== 'Auditor' && auth.role() !== 'Customer'"
+        >
+          User Management
+        </a>
+        <a
+          routerLink="/settings"
+          routerLinkActive="active"
+          *ngIf="auth.role() === 'Super Admin'"
+        >
+          Settings
+        </a>
+      </nav>
     </div>
   </div>
 </header>

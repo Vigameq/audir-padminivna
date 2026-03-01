@@ -221,6 +221,13 @@
   justify-content: flex-end;
 }
 
+.link-button {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .nc-inline.flagged-actions .assignee-select {
   width: 100%;
   min-width: 0;

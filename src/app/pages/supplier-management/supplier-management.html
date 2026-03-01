@@ -1,0 +1,442 @@
+<section class="supplier-management">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Supplier quality</p>
+      <h1>Supplier management</h1>
+      <p class="subtitle">Manage supplier PPAP, performance scorecards, PPM, worst suppliers, and supplier audits.</p>
+    </div>
+    <button class="ghost" type="button" (click)="refreshAll()">Refresh</button>
+  </header>
+
+  <div class="tab-row">
+    <button type="button" [class.active]="tab() === 'dashboard'" (click)="setTab('dashboard')">Dashboard</button>
+    <button type="button" [class.active]="tab() === 'master'" (click)="setTab('master')">Supplier master</button>
+    <button type="button" [class.active]="tab() === 'ppap'" (click)="setTab('ppap')">Supplier PPAP</button>
+    <button type="button" [class.active]="tab() === 'performance'" (click)="setTab('performance')">Supplier performance</button>
+    <button type="button" [class.active]="tab() === 'ppm'" (click)="setTab('ppm')">Supplier PPM</button>
+    <button type="button" [class.active]="tab() === 'worst'" (click)="setTab('worst')">Worst suppliers</button>
+    <button type="button" [class.active]="tab() === 'audits'" (click)="setTab('audits')">Supplier audit management</button>
+  </div>
+
+  <p class="error" *ngIf="error">{{ error }}</p>
+
+  <section class="panel" *ngIf="tab() === 'dashboard'">
+    <div class="panel-head">
+      <h2>Supplier dashboard</h2>
+      <button class="ghost" type="button" (click)="refreshAll()">Refresh analytics</button>
+    </div>
+
+    <div class="kpi-grid">
+      <article class="kpi-card">
+        <p>Total suppliers</p>
+        <h3>{{ dashboardSummary().kpis.totalSuppliers }}</h3>
+      </article>
+      <article class="kpi-card">
+        <p>Active suppliers</p>
+        <h3>{{ dashboardSummary().kpis.activeSuppliers }}</h3>
+      </article>
+      <article class="kpi-card">
+        <p>Pending PPAP</p>
+        <h3>{{ dashboardSummary().kpis.pendingPpap }}</h3>
+      </article>
+      <article class="kpi-card">
+        <p>Open supplier audits</p>
+        <h3>{{ dashboardSummary().kpis.openSupplierAudits }}</h3>
+      </article>
+    </div>
+
+    <div class="dashboard-grid">
+      <article class="chart-card">
+        <h3>Monthly PPM trend (last 6 months)</h3>
+        <div class="ppm-bars" *ngIf="dashboardSummary().monthlyPpmTrend.length; else noTrend">
+          <div class="ppm-col" *ngFor="let point of dashboardSummary().monthlyPpmTrend">
+            <span class="ppm-value">{{ point.avgPpm | number : '1.0-2' }}</span>
+            <div class="ppm-track">
+              <div class="ppm-fill" [style.height]="ppmTrendHeight(point.avgPpm)"></div>
+            </div>
+            <span class="ppm-label">{{ point.label }}</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <h3>Top 5 worst suppliers (risk index)</h3>
+        <div class="bar-list" *ngIf="dashboardSummary().topWorstSuppliers.length; else noWorstTrend">
+          <div class="bar-row" *ngFor="let row of dashboardSummary().topWorstSuppliers; let i = index">
+            <div class="bar-head">
+              <span>#{{ i + 1 }} · {{ row.code }} · {{ row.name }}</span>
+              <strong>{{ row.riskIndex | number : '1.0-2' }}</strong>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" [style.width]="worstSupplierWidth(row.riskIndex)"></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <h3>PPAP approval aging (pending)</h3>
+        <div class="bar-list">
+          <div class="bar-row">
+            <div class="bar-head">
+              <span>0-7 days</span>
+              <strong>{{ dashboardSummary().ppapApprovalAging.bucket0to7 }}</strong>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill aging" [style.width]="ppapAgingWidth(dashboardSummary().ppapApprovalAging.bucket0to7)"></div>
+            </div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-head">
+              <span>8-15 days</span>
+              <strong>{{ dashboardSummary().ppapApprovalAging.bucket8to15 }}</strong>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill aging" [style.width]="ppapAgingWidth(dashboardSummary().ppapApprovalAging.bucket8to15)"></div>
+            </div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-head">
+              <span>16-30 days</span>
+              <strong>{{ dashboardSummary().ppapApprovalAging.bucket16to30 }}</strong>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill aging" [style.width]="ppapAgingWidth(dashboardSummary().ppapApprovalAging.bucket16to30)"></div>
+            </div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-head">
+              <span>>30 days</span>
+              <strong>{{ dashboardSummary().ppapApprovalAging.bucketGt30 }}</strong>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill aging" [style.width]="ppapAgingWidth(dashboardSummary().ppapApprovalAging.bucketGt30)"></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="tab() === 'master'">
+    <div class="panel-head">
+      <h2>Register supplier</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Supplier name
+        <input type="text" [(ngModel)]="supplierForm.name" name="supplierName" placeholder="Supplier name" />
+      </label>
+      <label>
+        Category
+        <input type="text" [(ngModel)]="supplierForm.category" name="supplierCategory" placeholder="Category" />
+      </label>
+      <label>
+        Contact name
+        <input type="text" [(ngModel)]="supplierForm.contactName" name="supplierContactName" placeholder="Contact person" />
+      </label>
+      <label>
+        Contact email
+        <input type="email" [(ngModel)]="supplierForm.contactEmail" name="supplierContactEmail" placeholder="Email" />
+      </label>
+      <label>
+        Contact phone
+        <input type="text" [(ngModel)]="supplierForm.contactPhone" name="supplierContactPhone" placeholder="Phone" />
+      </label>
+      <label>
+        Status
+        <select [(ngModel)]="supplierForm.status" name="supplierStatus">
+          <option *ngFor="let status of supplierStatusOptions" [value]="status">{{ status }}</option>
+        </select>
+      </label>
+    </div>
+    <div class="card-actions">
+      <button class="primary" type="button" (click)="createSupplier()" [disabled]="!supplierForm.name.trim()">Add supplier</button>
+    </div>
+
+    <div class="list" *ngIf="suppliers().length; else noSuppliers">
+      <article class="item" *ngFor="let supplier of suppliers()">
+        <div class="item-main">
+          <h3>{{ supplier.code }} · {{ supplier.name }}</h3>
+          <p>{{ supplier.category || 'Category N/A' }} · {{ supplier.contactName || 'Contact N/A' }} · {{ supplier.contactEmail || 'No email' }}</p>
+        </div>
+        <div class="item-actions">
+          <select
+            [ngModel]="supplierEditDraft[supplier.id]?.status || supplier.status"
+            (ngModelChange)="patchSupplierStatus(supplier.id, $event)"
+          >
+            <option *ngFor="let status of supplierStatusOptions" [value]="status">{{ status }}</option>
+          </select>
+          <button class="ghost" type="button" (click)="saveSupplierStatus(supplier.id)">Save</button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="tab() === 'ppap'">
+    <div class="panel-head">
+      <h2>Supplier PPAP</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Supplier
+        <select [(ngModel)]="ppapForm.supplierId" name="ppapSupplierId">
+          <option [ngValue]="0">Select supplier</option>
+          <option *ngFor="let supplier of suppliers()" [ngValue]="supplier.id">{{ supplier.code }} · {{ supplier.name }}</option>
+        </select>
+      </label>
+      <label>
+        Part no
+        <input type="text" [(ngModel)]="ppapForm.partNo" name="ppapPartNo" placeholder="Part number" />
+      </label>
+      <label>
+        PPAP level
+        <input type="text" [(ngModel)]="ppapForm.level" name="ppapLevel" placeholder="Level 3" />
+      </label>
+      <label>
+        Submission date
+        <input type="date" [(ngModel)]="ppapForm.submissionDate" name="ppapSubmissionDate" />
+      </label>
+      <label>
+        Approval status
+        <select [(ngModel)]="ppapForm.approvalStatus" name="ppapApprovalStatus">
+          <option *ngFor="let status of ppapStatusOptions" [value]="status">{{ status }}</option>
+        </select>
+      </label>
+      <label>
+        Approved by
+        <input type="text" [(ngModel)]="ppapForm.approvedBy" name="ppapApprovedBy" placeholder="Approver" />
+      </label>
+      <label class="full">
+        Remarks
+        <textarea rows="2" [(ngModel)]="ppapForm.remarks" name="ppapRemarks" placeholder="Remarks"></textarea>
+      </label>
+    </div>
+    <div class="card-actions">
+      <button class="primary" type="button" (click)="createPpap()" [disabled]="!ppapForm.supplierId || !ppapForm.partNo.trim()">Create PPAP record</button>
+    </div>
+
+    <div class="list" *ngIf="ppap().length; else noPpap">
+      <article class="item" *ngFor="let record of ppap()">
+        <div class="item-main">
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.partNo }}</h3>
+          <p>{{ record.level }} · Submission: {{ record.submissionDate || '—' }} · Approved by: {{ record.approvedBy || '—' }}</p>
+        </div>
+        <div class="item-actions">
+          <select
+            [ngModel]="ppapEditDraft[record.id]?.approvalStatus || record.approvalStatus"
+            (ngModelChange)="patchPpapStatus(record.id, $event)"
+          >
+            <option *ngFor="let status of ppapStatusOptions" [value]="status">{{ status }}</option>
+          </select>
+          <button class="ghost" type="button" (click)="savePpapStatus(record.id)">Save</button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="tab() === 'performance'">
+    <div class="panel-head">
+      <h2>Supplier performance</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Supplier
+        <select [(ngModel)]="performanceForm.supplierId" name="performanceSupplierId">
+          <option [ngValue]="0">Select supplier</option>
+          <option *ngFor="let supplier of suppliers()" [ngValue]="supplier.id">{{ supplier.code }} · {{ supplier.name }}</option>
+        </select>
+      </label>
+      <label>
+        Period month
+        <input type="date" [(ngModel)]="performanceForm.periodMonth" name="performancePeriodMonth" />
+      </label>
+      <label>
+        Quality score
+        <input type="number" min="0" max="100" [(ngModel)]="performanceForm.qualityScore" name="performanceQualityScore" />
+      </label>
+      <label>
+        Delivery score
+        <input type="number" min="0" max="100" [(ngModel)]="performanceForm.deliveryScore" name="performanceDeliveryScore" />
+      </label>
+      <label>
+        Service score
+        <input type="number" min="0" max="100" [(ngModel)]="performanceForm.serviceScore" name="performanceServiceScore" />
+      </label>
+      <label class="full">
+        Remarks
+        <textarea rows="2" [(ngModel)]="performanceForm.remarks" name="performanceRemarks"></textarea>
+      </label>
+    </div>
+    <div class="card-actions">
+      <button class="primary" type="button" (click)="createPerformance()" [disabled]="!performanceForm.supplierId || !performanceForm.periodMonth">Add performance</button>
+    </div>
+
+    <div class="list" *ngIf="performance().length; else noPerformance">
+      <article class="item" *ngFor="let record of performance()">
+        <div class="item-main">
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.periodMonth }}</h3>
+          <p>Q: {{ record.qualityScore }} · D: {{ record.deliveryScore }} · S: {{ record.serviceScore }} · Total: {{ record.totalScore }}</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="tab() === 'ppm'">
+    <div class="panel-head">
+      <h2>Supplier PPM</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Supplier
+        <select [(ngModel)]="ppmForm.supplierId" name="ppmSupplierId">
+          <option [ngValue]="0">Select supplier</option>
+          <option *ngFor="let supplier of suppliers()" [ngValue]="supplier.id">{{ supplier.code }} · {{ supplier.name }}</option>
+        </select>
+      </label>
+      <label>
+        Period month
+        <input type="date" [(ngModel)]="ppmForm.periodMonth" name="ppmPeriodMonth" />
+      </label>
+      <label>
+        Delivered qty
+        <input type="number" min="0" [(ngModel)]="ppmForm.deliveredQty" name="ppmDeliveredQty" />
+      </label>
+      <label>
+        Defective qty
+        <input type="number" min="0" [(ngModel)]="ppmForm.defectiveQty" name="ppmDefectiveQty" />
+      </label>
+      <label class="full">
+        Remarks
+        <textarea rows="2" [(ngModel)]="ppmForm.remarks" name="ppmRemarks"></textarea>
+      </label>
+    </div>
+    <div class="card-actions">
+      <button
+        class="primary"
+        type="button"
+        (click)="createPpm()"
+        [disabled]="!ppmForm.supplierId || !ppmForm.periodMonth || ppmForm.defectiveQty > ppmForm.deliveredQty"
+      >
+        Add PPM record
+      </button>
+    </div>
+
+    <div class="list" *ngIf="ppm().length; else noPpm">
+      <article class="item" *ngFor="let record of ppm()">
+        <div class="item-main">
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.periodMonth }}</h3>
+          <p>Delivered: {{ record.deliveredQty }} · Defective: {{ record.defectiveQty }} · PPM: {{ record.ppm | number : '1.0-2' }}</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="tab() === 'worst'">
+    <div class="panel-head">
+      <h2>Worst suppliers</h2>
+      <button class="ghost" type="button" (click)="recalculateWorstSuppliers()">Recalculate</button>
+    </div>
+    <div class="table-wrap" *ngIf="worstSuppliers().length; else noWorst">
+      <table>
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th>Avg PPM</th>
+            <th>Avg score</th>
+            <th>Risk index</th>
+            <th>Latest audit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of worstSuppliers(); let i = index">
+            <td>#{{ i + 1 }} · {{ row.code }} · {{ row.name }}</td>
+            <td>{{ row.avgPpm | number : '1.0-2' }}</td>
+            <td>{{ row.avgTotalScore | number : '1.0-2' }}</td>
+            <td>{{ row.riskIndex | number : '1.0-2' }}</td>
+            <td>{{ row.latestAuditStatus || 'N/A' }} {{ row.latestAuditDate ? ('· ' + row.latestAuditDate) : '' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="tab() === 'audits'">
+    <div class="panel-head">
+      <h2>Supplier audit management</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Supplier
+        <select [(ngModel)]="auditForm.supplierId" name="auditSupplierId">
+          <option [ngValue]="0">Select supplier</option>
+          <option *ngFor="let supplier of suppliers()" [ngValue]="supplier.id">{{ supplier.code }} · {{ supplier.name }}</option>
+        </select>
+      </label>
+      <label>
+        Audit date
+        <input type="date" [(ngModel)]="auditForm.auditDate" name="auditDate" />
+      </label>
+      <label>
+        Audit type
+        <input type="text" [(ngModel)]="auditForm.auditType" name="auditType" />
+      </label>
+      <label>
+        Auditor
+        <input type="text" [(ngModel)]="auditForm.auditorName" name="auditAuditorName" />
+      </label>
+      <label>
+        Score
+        <input type="number" min="0" max="100" [(ngModel)]="auditForm.score" name="auditScore" />
+      </label>
+      <label>
+        Status
+        <select [(ngModel)]="auditForm.status" name="auditStatus">
+          <option *ngFor="let status of auditStatusOptions" [value]="status">{{ status }}</option>
+        </select>
+      </label>
+      <label>
+        Action owner
+        <input type="text" [(ngModel)]="auditForm.actionOwner" name="auditActionOwner" />
+      </label>
+      <label>
+        Target close
+        <input type="date" [(ngModel)]="auditForm.targetCloseDate" name="auditTargetCloseDate" />
+      </label>
+      <label class="full">
+        Findings
+        <textarea rows="2" [(ngModel)]="auditForm.findings" name="auditFindings"></textarea>
+      </label>
+    </div>
+    <div class="card-actions">
+      <button class="primary" type="button" (click)="createAudit()" [disabled]="!auditForm.supplierId || !auditForm.auditDate">Create supplier audit</button>
+    </div>
+
+    <div class="list" *ngIf="audits().length; else noAudits">
+      <article class="item" *ngFor="let record of audits()">
+        <div class="item-main">
+          <h3>{{ record.supplierCode }} · {{ record.supplierName }} · {{ record.auditDate }}</h3>
+          <p>{{ record.auditType || 'Audit' }} · Auditor: {{ record.auditorName || 'N/A' }} · Score: {{ record.score || 0 }} · Owner: {{ record.actionOwner || 'N/A' }}</p>
+        </div>
+        <div class="item-actions">
+          <select
+            [ngModel]="auditEditDraft[record.id]?.status || record.status"
+            (ngModelChange)="patchAuditStatus(record.id, $event)"
+          >
+            <option *ngFor="let status of auditStatusOptions" [value]="status">{{ status }}</option>
+          </select>
+          <button class="ghost" type="button" (click)="saveAuditStatus(record.id)">Save</button>
+        </div>
+      </article>
+    </div>
+  </section>
+</section>
+
+<ng-template #noSuppliers><div class="empty">No suppliers found.</div></ng-template>
+<ng-template #noPpap><div class="empty">No PPAP records found.</div></ng-template>
+<ng-template #noPerformance><div class="empty">No performance records found.</div></ng-template>
+<ng-template #noPpm><div class="empty">No PPM records found.</div></ng-template>
+<ng-template #noWorst><div class="empty">No supplier risk data available.</div></ng-template>
+<ng-template #noAudits><div class="empty">No supplier audits found.</div></ng-template>
+<ng-template #noTrend><div class="empty">No monthly PPM trend data available.</div></ng-template>
+<ng-template #noWorstTrend><div class="empty">No worst-supplier trend data available.</div></ng-template>

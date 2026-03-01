@@ -1,0 +1,186 @@
+<section class="instruments">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Asset control</p>
+      <h1>Instrument handling and calibration</h1>
+      <p class="subtitle">Maintain instrument register and calibration tracker with due-date visibility.</p>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>New instrument</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Instrument name
+        <input type="text" [(ngModel)]="createForm.name" name="name" placeholder="Instrument name" />
+      </label>
+      <label>
+        Type
+        <input type="text" [(ngModel)]="createForm.instrumentType" name="instrumentType" placeholder="Type" />
+      </label>
+      <label>
+        Serial number
+        <input type="text" [(ngModel)]="createForm.serialNumber" name="serialNumber" placeholder="Serial number" />
+      </label>
+      <label>
+        Location
+        <input type="text" [(ngModel)]="createForm.location" name="location" placeholder="Location" />
+      </label>
+      <label>
+        Owner department
+        <input type="text" [(ngModel)]="createForm.ownerDepartment" name="ownerDepartment" placeholder="Department" />
+      </label>
+      <label>
+        Frequency (days)
+        <input type="number" min="1" [(ngModel)]="createForm.calibrationFrequencyDays" name="calibrationFrequencyDays" />
+      </label>
+      <label>
+        Last calibrated
+        <input type="date" [(ngModel)]="createForm.lastCalibratedAt" name="lastCalibratedAt" />
+      </label>
+      <label>
+        Status
+        <select [(ngModel)]="createForm.status" name="status">
+          <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label class="full">
+        Remarks
+        <textarea rows="2" [(ngModel)]="createForm.remarks" name="remarks" placeholder="Remarks"></textarea>
+      </label>
+    </div>
+    <div class="form-actions">
+      <p class="error" *ngIf="saveError">{{ saveError }}</p>
+      <button class="primary" type="button" (click)="createInstrument()" [disabled]="saving || !createForm.name.trim()">
+        {{ saving ? 'Saving...' : 'Add instrument' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header register-header">
+      <h2 class="register-title">Calibration tracker</h2>
+      <div class="filter-row">
+        <label class="filter-box">
+          <span>Status</span>
+          <select [ngModel]="activeStatus()" (ngModelChange)="setStatus($event)">
+            <option value="All">All</option>
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>Due filter</span>
+          <select [ngModel]="dueFilter()" (ngModelChange)="setDueFilter($event)">
+            <option value="All">All</option>
+            <option value="Overdue">Overdue</option>
+            <option value="DueSoon">Due in 7 days</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="empty" *ngIf="!instruments().length">No instruments found for selected filters.</div>
+
+    <article class="instrument-card" *ngFor="let record of instruments()">
+      <div class="instrument-head">
+        <div>
+          <p class="code">{{ record.code }} · {{ record.instrumentType || 'Type N/A' }}</p>
+          <h3>{{ record.name }}</h3>
+          <p class="meta">
+            Serial: {{ record.serialNumber || '—' }} · Location: {{ record.location || '—' }} ·
+            Department: {{ record.ownerDepartment || '—' }}
+          </p>
+        </div>
+        <span class="status">{{ record.status }}</span>
+      </div>
+      <div class="details">
+        <span><strong>Frequency:</strong> {{ record.calibrationFrequencyDays }} days</span>
+        <span><strong>Last calibrated:</strong> {{ record.lastCalibratedAt || '—' }}</span>
+        <span><strong>Next due:</strong> {{ record.nextCalibrationDue || '—' }}</span>
+        <span><strong>Due state:</strong> {{ dueLabel(record) }}</span>
+      </div>
+
+      <div class="edit-row" *ngIf="hasEditDraft(record.id)">
+        <label>
+          Status
+          <select [ngModel]="editDraft[record.id]?.status || record.status" (ngModelChange)="patchDraft(record.id, 'status', $event)">
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label>
+          Frequency (days)
+          <input type="number" min="1" [ngModel]="editDraft[record.id]?.calibrationFrequencyDays ?? record.calibrationFrequencyDays" (ngModelChange)="patchDraft(record.id, 'calibrationFrequencyDays', $event)" />
+        </label>
+        <label>
+          Next due
+          <input type="date" [ngModel]="editDraft[record.id]?.nextCalibrationDue ?? record.nextCalibrationDue" (ngModelChange)="patchDraft(record.id, 'nextCalibrationDue', $event)" />
+        </label>
+        <label class="full">
+          Remarks
+          <textarea rows="2" [ngModel]="editDraft[record.id]?.remarks ?? record.remarks" (ngModelChange)="patchDraft(record.id, 'remarks', $event)"></textarea>
+        </label>
+      </div>
+
+      <div class="card-actions" *ngIf="!hasEditDraft(record.id)">
+        <button class="ghost small" type="button" (click)="startEdit(record)">Update</button>
+        <button class="primary small" type="button" (click)="openCalibration(record)">Record calibration</button>
+      </div>
+      <div class="card-actions" *ngIf="hasEditDraft(record.id)">
+        <button class="primary small" type="button" (click)="saveInstrument(record)">Save</button>
+        <button class="ghost small" type="button" (click)="cancelEdit(record.id)">Cancel</button>
+      </div>
+    </article>
+  </section>
+
+  <div class="modal-backdrop" *ngIf="selectedInstrument">
+    <div class="modal">
+      <header>
+        <h2>Calibration log · {{ selectedInstrument.code }}</h2>
+        <button class="ghost small" type="button" (click)="closeCalibration()">Close</button>
+      </header>
+      <div class="modal-body">
+        <div class="form-grid">
+          <label>
+            Calibration date
+            <input type="date" [(ngModel)]="calibrationForm.calibrationDate" name="calibrationDate" />
+          </label>
+          <label>
+            Calibrated by
+            <input type="text" [(ngModel)]="calibrationForm.calibratedBy" name="calibratedBy" />
+          </label>
+          <label>
+            Result
+            <select [(ngModel)]="calibrationForm.result" name="calibrationResult">
+              <option *ngFor="let option of calibrationResultOptions" [value]="option">{{ option }}</option>
+            </select>
+          </label>
+          <label>
+            Certificate no.
+            <input type="text" [(ngModel)]="calibrationForm.certificateNo" name="certificateNo" />
+          </label>
+          <label class="full">
+            Notes
+            <textarea rows="2" [(ngModel)]="calibrationForm.notes" name="calibrationNotes"></textarea>
+          </label>
+        </div>
+        <div class="card-actions">
+          <button class="primary small" type="button" (click)="saveCalibration()" [disabled]="!calibrationForm.calibrationDate">
+            Save calibration
+          </button>
+        </div>
+
+        <div class="history">
+          <h3>History</h3>
+          <div class="empty" *ngIf="loadingHistory">Loading...</div>
+          <div class="empty" *ngIf="!loadingHistory && !calibrationHistory.length">No calibration records.</div>
+          <article class="history-item" *ngFor="let item of calibrationHistory">
+            <span>{{ item.calibrationDate }} · {{ item.result }}</span>
+            <span>By: {{ item.calibratedBy || '—' }} · Cert: {{ item.certificateNo || '—' }} · Next due: {{ item.nextDueDate }}</span>
+          </article>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

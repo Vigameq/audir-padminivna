@@ -1,0 +1,237 @@
+<section class="lessons">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Knowledge</p>
+      <h1>Lessons learnt tracker</h1>
+      <p class="subtitle">Capture, publish, and acknowledge reusable lessons across audits, NCs, complaints, and changes.</p>
+    </div>
+  </header>
+
+  <section class="kpi-grid">
+    <article class="kpi-card">
+      <span>Draft</span>
+      <strong>{{ kpis.draftCount }}</strong>
+    </article>
+    <article class="kpi-card">
+      <span>Published</span>
+      <strong>{{ kpis.publishedCount }}</strong>
+    </article>
+    <article class="kpi-card">
+      <span>Archived</span>
+      <strong>{{ kpis.archivedCount }}</strong>
+    </article>
+    <article class="kpi-card">
+      <span>Published this month</span>
+      <strong>{{ kpis.publishedThisMonth }}</strong>
+    </article>
+    <article class="kpi-card">
+      <span>Lessons with acknowledgment</span>
+      <strong>{{ kpis.lessonsWithAck }}</strong>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2>New lesson</h2>
+    </div>
+    <div class="form-grid">
+      <label>
+        Source type
+        <select [(ngModel)]="createForm.sourceType" name="sourceType">
+          <option *ngFor="let option of sourceTypeOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Source reference
+        <input type="text" [(ngModel)]="createForm.sourceRef" name="sourceRef" placeholder="Audit/NC/Complaint/Change code" />
+      </label>
+      <label>
+        Risk level
+        <select [(ngModel)]="createForm.riskLevel" name="riskLevel">
+          <option *ngFor="let option of riskOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Applicability
+        <select [(ngModel)]="createForm.applicability" name="applicability">
+          <option *ngFor="let option of applicabilityOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label>
+        Department
+        <input type="text" [(ngModel)]="createForm.department" name="department" placeholder="Target department" />
+      </label>
+      <label>
+        Category
+        <input type="text" [(ngModel)]="createForm.category" name="category" placeholder="Category" />
+      </label>
+      <label class="full">
+        Title
+        <input type="text" [(ngModel)]="createForm.title" name="title" placeholder="Lesson title" />
+      </label>
+      <label class="full">
+        Summary
+        <textarea rows="2" [(ngModel)]="createForm.summary" name="summary" placeholder="Short summary"></textarea>
+      </label>
+      <label class="full">
+        Problem statement
+        <textarea rows="2" [(ngModel)]="createForm.problemStatement" name="problemStatement" placeholder="What happened"></textarea>
+      </label>
+      <label class="full">
+        Root cause
+        <textarea rows="2" [(ngModel)]="createForm.rootCause" name="rootCause"></textarea>
+      </label>
+      <label class="full">
+        What worked
+        <textarea rows="2" [(ngModel)]="createForm.whatWorked" name="whatWorked"></textarea>
+      </label>
+      <label class="full">
+        What failed
+        <textarea rows="2" [(ngModel)]="createForm.whatFailed" name="whatFailed"></textarea>
+      </label>
+      <label class="full">
+        Preventive recommendation
+        <textarea rows="2" [(ngModel)]="createForm.preventiveRecommendation" name="preventiveRecommendation"></textarea>
+      </label>
+      <label class="full">
+        Standardization action
+        <textarea rows="2" [(ngModel)]="createForm.standardizationAction" name="standardizationAction"></textarea>
+      </label>
+      <label>
+        Effective from
+        <input type="date" [(ngModel)]="createForm.effectiveFrom" name="effectiveFrom" />
+      </label>
+      <label>
+        Review due
+        <input type="date" [(ngModel)]="createForm.reviewDueAt" name="reviewDueAt" />
+      </label>
+      <label>
+        Status
+        <select [(ngModel)]="createForm.status" name="status">
+          <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+        </select>
+      </label>
+      <label class="full">
+        Tags
+        <input type="text" [(ngModel)]="createForm.tagsInput" name="tagsInput" placeholder="Comma separated tags" />
+      </label>
+    </div>
+    <div class="form-actions">
+      <p class="error" *ngIf="saveError">{{ saveError }}</p>
+      <button class="primary" type="button" (click)="createLesson()" [disabled]="saving || !createForm.title.trim()">
+        {{ saving ? 'Saving...' : 'Create lesson' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header register-header">
+      <h2 class="register-title">Lesson register</h2>
+      <div class="filter-row">
+        <label class="filter-box">
+          <span>Status</span>
+          <select [ngModel]="activeStatus()" (ngModelChange)="setStatus($event)">
+            <option value="All">All</option>
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>Source</span>
+          <select [ngModel]="activeSourceType()" (ngModelChange)="setSourceType($event)">
+            <option value="All">All</option>
+            <option *ngFor="let option of sourceTypeOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label class="filter-box">
+          <span>Search</span>
+          <input type="text" [ngModel]="searchText()" (ngModelChange)="onSearchChange($event)" placeholder="Title/code/summary" />
+        </label>
+        <label class="filter-box">
+          <span>Tag</span>
+          <input type="text" [ngModel]="filterTag()" (ngModelChange)="onTagChange($event)" placeholder="Tag" />
+        </label>
+        <button class="ghost small apply-btn" type="button" (click)="applySearch()">Apply</button>
+      </div>
+    </div>
+
+    <div class="empty" *ngIf="!lessons().length">No lessons found for selected filters.</div>
+
+    <article class="lesson-card" *ngFor="let record of lessons()">
+      <div class="lesson-head">
+        <div>
+          <p class="code">{{ record.code }} · {{ record.sourceType }} · {{ record.sourceRef || 'Manual' }}</p>
+          <h3>{{ record.title }}</h3>
+          <p class="meta">
+            {{ record.status }} · Risk: {{ record.riskLevel }} · {{ record.applicability }} ·
+            Department: {{ record.department || '—' }}
+          </p>
+        </div>
+        <span class="status">{{ record.status }}</span>
+      </div>
+      <p class="description" *ngIf="record.summary">{{ record.summary }}</p>
+      <div class="details">
+        <span><strong>Problem:</strong> {{ record.problemStatement || '—' }}</span>
+        <span><strong>Root cause:</strong> {{ record.rootCause || '—' }}</span>
+        <span><strong>Preventive:</strong> {{ record.preventiveRecommendation || '—' }}</span>
+        <span><strong>Standardization:</strong> {{ record.standardizationAction || '—' }}</span>
+      </div>
+      <div class="tag-list" *ngIf="record.tags.length">
+        <span class="tag" *ngFor="let tag of record.tags">{{ tag }}</span>
+      </div>
+
+      <div class="edit-row" *ngIf="hasEditDraft(record.id)">
+        <label>
+          Status
+          <select [ngModel]="editDraft[record.id]?.status || record.status" (ngModelChange)="patchDraft(record.id, 'status', $event)">
+            <option *ngFor="let option of statusOptions" [value]="option">{{ option }}</option>
+          </select>
+        </label>
+        <label class="full">
+          Summary
+          <textarea rows="2" [ngModel]="editDraft[record.id]?.summary ?? record.summary" (ngModelChange)="patchDraft(record.id, 'summary', $event)"></textarea>
+        </label>
+        <label class="full">
+          Preventive recommendation
+          <textarea rows="2" [ngModel]="editDraft[record.id]?.preventiveRecommendation ?? record.preventiveRecommendation" (ngModelChange)="patchDraft(record.id, 'preventiveRecommendation', $event)"></textarea>
+        </label>
+        <label class="full">
+          Standardization action
+          <textarea rows="2" [ngModel]="editDraft[record.id]?.standardizationAction ?? record.standardizationAction" (ngModelChange)="patchDraft(record.id, 'standardizationAction', $event)"></textarea>
+        </label>
+        <label>
+          Review due
+          <input type="date" [ngModel]="editDraft[record.id]?.reviewDueAt ?? record.reviewDueAt" (ngModelChange)="patchDraft(record.id, 'reviewDueAt', $event)" />
+        </label>
+      </div>
+
+      <div class="ack-summary">
+        <span>
+          Ack:
+          {{
+            ackSummary[record.id]
+              ? ackSummary[record.id].acknowledgedCount + '/' + ackSummary[record.id].totalUsers
+              : '—'
+          }}
+        </span>
+        <button class="ghost small" type="button" (click)="loadAckStatus(record.id)">
+          View ack status
+        </button>
+      </div>
+
+      <div class="card-actions" *ngIf="!hasEditDraft(record.id)">
+        <button class="ghost small" type="button" (click)="startEdit(record)">Edit</button>
+        <button class="primary small" type="button" (click)="acknowledge(record)">Acknowledge</button>
+        <button class="ghost small" type="button" (click)="publish(record)" [disabled]="record.status === 'Published'">
+          Publish
+        </button>
+        <button class="ghost small" type="button" (click)="archive(record)" [disabled]="record.status === 'Archived'">
+          Archive
+        </button>
+      </div>
+      <div class="card-actions" *ngIf="hasEditDraft(record.id)">
+        <button class="primary small" type="button" (click)="saveLesson(record)">Save</button>
+        <button class="ghost small" type="button" (click)="cancelEdit(record.id)">Cancel</button>
+      </div>
+    </article>
+  </section>
+</section>

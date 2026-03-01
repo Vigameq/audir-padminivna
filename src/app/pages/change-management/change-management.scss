@@ -205,6 +205,12 @@ button:disabled {
   gap: 0.55rem;
 }
 
+.link-button {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
 .empty {
   text-align: center;
   color: var(--color-muted);

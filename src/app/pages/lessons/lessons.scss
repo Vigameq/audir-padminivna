@@ -1,4 +1,4 @@
-.complaints {
+.lessons {
   display: grid;
   gap: 1.5rem;
 }
@@ -21,6 +21,30 @@
   color: var(--color-muted);
 }
 
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 0.7rem;
+}
+
+.kpi-card {
+  border: 1px solid var(--color-line);
+  border-radius: 0.9rem;
+  padding: 0.8rem;
+  background: var(--color-surface);
+  display: grid;
+  gap: 0.2rem;
+}
+
+.kpi-card span {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.kpi-card strong {
+  font-size: 1.15rem;
+}
+
 .panel {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
@@ -32,11 +56,6 @@
 
 .panel-header h2 {
   margin: 0;
-}
-
-.panel-header.stacked {
-  display: grid;
-  gap: 0.6rem;
 }
 
 .register-header {
@@ -75,7 +94,8 @@
 .form-grid textarea,
 .edit-row input,
 .edit-row select,
-.edit-row textarea {
+.edit-row textarea,
+.filter-box input {
   font: inherit;
   color: var(--color-ink);
   border: 1px solid rgba(20, 10, 0, 0.15);
@@ -138,16 +158,6 @@ button:disabled {
   background: rgba(255, 255, 255, 0.7);
 }
 
-.escalation-run {
-  height: 2.35rem;
-}
-
-.run-message {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--color-muted);
-}
-
 .filter-box span {
   font-size: 0.78rem;
   color: var(--color-muted);
@@ -162,7 +172,14 @@ button:disabled {
   background: var(--color-surface);
 }
 
-.complaint-card {
+.apply-btn {
+  height: 2.35rem;
+  min-width: 5rem;
+  padding: 0 1rem;
+  align-self: flex-end;
+}
+
+.lesson-card {
   border: 1px solid rgba(20, 10, 0, 0.08);
   border-radius: 0.9rem;
   padding: 0.8rem;
@@ -170,7 +187,7 @@ button:disabled {
   gap: 0.55rem;
 }
 
-.complaint-head {
+.lesson-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -184,15 +201,14 @@ button:disabled {
   color: var(--color-muted);
 }
 
-.complaint-head h3 {
+.lesson-head h3 {
   margin: 0.2rem 0;
   font-size: 1rem;
 }
 
 .meta,
 .description,
-.details,
-.resolution {
+.details {
   margin: 0;
   color: var(--color-muted);
 }
@@ -202,34 +218,6 @@ button:disabled {
   flex-wrap: wrap;
   gap: 0.6rem;
   font-size: 0.83rem;
-  align-items: center;
-}
-
-.escalation-tag {
-  border-radius: 999px;
-  padding: 0.15rem 0.55rem;
-  border: 1px solid rgba(20, 10, 0, 0.2);
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-}
-
-.escalation-tag.none {
-  border-color: rgba(20, 10, 0, 0.2);
-}
-
-.escalation-tag.escalated {
-  border-color: rgba(255, 154, 0, 0.6);
-  background: rgba(255, 154, 0, 0.13);
-}
-
-.escalation-tag.final {
-  border-color: rgba(180, 35, 24, 0.6);
-  background: rgba(180, 35, 24, 0.1);
-}
-
-.escalation-tag.closed {
-  border-color: rgba(0, 179, 136, 0.55);
-  background: rgba(0, 179, 136, 0.14);
 }
 
 .status {
@@ -239,14 +227,25 @@ button:disabled {
   border: 1px solid rgba(20, 10, 0, 0.2);
 }
 
-.status.inprogress {
-  border-color: rgba(255, 154, 0, 0.55);
-  background: rgba(255, 154, 0, 0.14);
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
-.status.closed {
-  border-color: rgba(0, 179, 136, 0.55);
-  background: rgba(0, 179, 136, 0.14);
+.tag {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 154, 0, 0.4);
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.ack-summary {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--color-muted);
+  font-size: 0.82rem;
 }
 
 .edit-row {
@@ -259,12 +258,7 @@ button:disabled {
   display: flex;
   justify-content: flex-end;
   gap: 0.55rem;
-}
-
-.link-button {
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
+  flex-wrap: wrap;
 }
 
 .empty {
@@ -278,6 +272,12 @@ button:disabled {
   color: #b42318;
 }
 
+@media (max-width: 980px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
+
 @media (max-width: 860px) {
   .register-header {
     display: grid;
@@ -285,14 +285,17 @@ button:disabled {
   }
 
   .filter-row {
-    display: grid;
-    grid-template-columns: 1fr;
     margin-left: 0;
     justify-content: start;
   }
 
   .filter-box {
     min-width: 0;
+    width: 100%;
+  }
+
+  .apply-btn {
+    width: auto;
   }
 
   .form-grid,

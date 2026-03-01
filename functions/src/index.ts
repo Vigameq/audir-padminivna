@@ -608,6 +608,21 @@ const generateChangeCode = () => {
   return `CHG-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
 };
 
+const generateLessonCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `LSN-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
+};
+
+const generateInstrumentCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `INS-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
+};
+
+const generateSupplierCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `SUP-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
+};
+
 type ComplaintEscalationRule = {
   level: number;
   thresholdHours: number;
@@ -703,6 +718,41 @@ const logComplaintEvent = async (payload: {
       payload.createdBy ?? null,
     ]
   );
+};
+
+const logLessonEvent = async (payload: {
+  tenantId: number;
+  lessonId: number;
+  eventType: string;
+  message?: string;
+  oldData?: unknown;
+  newData?: unknown;
+  createdBy?: number | null;
+}) => {
+  await pool.query(
+    `INSERT INTO lesson_events
+      (tenant_id, lesson_id, event_type, message, old_data, new_data, created_by, created_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, NOW())`,
+    [
+      payload.tenantId,
+      payload.lessonId,
+      payload.eventType,
+      payload.message ?? null,
+      payload.oldData ? JSON.stringify(payload.oldData) : null,
+      payload.newData ? JSON.stringify(payload.newData) : null,
+      payload.createdBy ?? null,
+    ]
+  );
+};
+
+const normalizeTags = (raw: unknown) => {
+  if (!Array.isArray(raw)) {
+    return [] as string[];
+  }
+  return raw
+    .map((tag) => String(tag ?? '').trim())
+    .filter((tag) => !!tag)
+    .slice(0, 20);
 };
 
 const getEscalationRecipients = async (payload: {
@@ -1284,6 +1334,1330 @@ router.put('/changes/:id', requireAuth, async (req: AuthedRequest, res) => {
     return res.status(404).json({ detail: 'Change request not found' });
   }
   return res.json(rows[0]);
+});
+
+router.get('/lessons', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const params: unknown[] = [tenantId];
+  const filters: string[] = ['tenant_id = $1'];
+
+  const status = String(req.query.status ?? '').trim();
+  const sourceType = String(req.query.source_type ?? '').trim();
+  const q = String(req.query.q ?? '').trim().toLowerCase();
+  const tag = String(req.query.tag ?? '').trim().toLowerCase();
+
+  if (status) {
+    params.push(status);
+    filters.push(`status = $${params.length}`);
+  }
+  if (sourceType) {
+    params.push(sourceType);
+    filters.push(`source_type = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    filters.push(
+      `(LOWER(code) LIKE $${params.length} OR LOWER(title) LIKE $${params.length} OR LOWER(summary) LIKE $${params.length} OR LOWER(problem_statement) LIKE $${params.length})`
+    );
+  }
+  if (tag) {
+    params.push(tag);
+    filters.push(`EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(tags) AS t(value)
+      WHERE LOWER(t.value) = $${params.length}
+    )`);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT id, code, title, summary, problem_statement, root_cause, what_worked, what_failed,
+            preventive_recommendation, standardization_action, source_type, source_ref,
+            category, department, tags, risk_level, applicability, status, owner_id, approved_by,
+            approved_at, effective_from, review_due_at, created_at, updated_at
+     FROM lessons_learned
+     WHERE ${filters.join(' AND ')}
+     ORDER BY created_at DESC`,
+    params
+  );
+  return res.json(rows);
+});
+
+router.get('/lessons/kpis', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+
+  const [summaryResult, ackResult] = await Promise.all([
+    pool.query(
+      `SELECT
+          COUNT(*) FILTER (WHERE status = 'Draft')::int AS draft_count,
+          COUNT(*) FILTER (WHERE status = 'Published')::int AS published_count,
+          COUNT(*) FILTER (WHERE status = 'Archived')::int AS archived_count,
+          COUNT(*) FILTER (WHERE status = 'Published' AND created_at >= $2)::int AS published_this_month
+       FROM lessons_learned
+       WHERE tenant_id = $1`,
+      [tenantId, monthStart.toISOString()]
+    ),
+    pool.query(
+      `SELECT
+          COUNT(DISTINCT a.lesson_id)::int AS lessons_with_ack,
+          COUNT(*)::int AS total_ack_rows
+       FROM lesson_acknowledgements a
+       WHERE a.tenant_id = $1`,
+      [tenantId]
+    ),
+  ]);
+
+  const row = summaryResult.rows[0] ?? {};
+  const ack = ackResult.rows[0] ?? {};
+  return res.json({
+    draft_count: Number(row.draft_count ?? 0),
+    published_count: Number(row.published_count ?? 0),
+    archived_count: Number(row.archived_count ?? 0),
+    published_this_month: Number(row.published_this_month ?? 0),
+    lessons_with_ack: Number(ack.lessons_with_ack ?? 0),
+    total_ack_rows: Number(ack.total_ack_rows ?? 0),
+  });
+});
+
+router.post('/lessons', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const title = String(payload.title ?? '').trim();
+  if (!title) {
+    return res.status(400).json({ detail: 'Title is required' });
+  }
+  const sourceType = String(payload.source_type ?? 'Manual').trim();
+  const riskLevel = String(payload.risk_level ?? 'Medium').trim();
+  const applicability = String(payload.applicability ?? 'Plant').trim();
+  const status = String(payload.status ?? 'Draft').trim();
+  if (!['Audit', 'NC', 'Complaint', 'Change', 'Manual'].includes(sourceType)) {
+    return res.status(400).json({ detail: 'Invalid source_type' });
+  }
+  if (!['Low', 'Medium', 'High', 'Critical'].includes(riskLevel)) {
+    return res.status(400).json({ detail: 'Invalid risk_level' });
+  }
+  if (!['Plant', 'Line', 'Product', 'Global'].includes(applicability)) {
+    return res.status(400).json({ detail: 'Invalid applicability' });
+  }
+  if (!['Draft', 'Published', 'Archived'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = generateLessonCode();
+    const exists = await pool.query(
+      'SELECT 1 FROM lessons_learned WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+      [tenantId, code]
+    );
+    if (!exists.rows.length) {
+      break;
+    }
+    code = '';
+  }
+  if (!code) {
+    return res.status(500).json({ detail: 'Unable to generate lesson code' });
+  }
+
+  const approvedBy = status === 'Published' ? userId : null;
+  const approvedAt = status === 'Published' ? new Date().toISOString() : null;
+  const tags = normalizeTags(payload.tags);
+  const { rows } = await pool.query(
+    `INSERT INTO lessons_learned
+      (tenant_id, code, title, summary, problem_statement, root_cause, what_worked, what_failed,
+       preventive_recommendation, standardization_action, source_type, source_ref, category, department,
+       tags, risk_level, applicability, status, owner_id, approved_by, approved_at, effective_from,
+       review_due_at, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15::jsonb, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW())
+     RETURNING id, code, title, summary, problem_statement, root_cause, what_worked, what_failed,
+               preventive_recommendation, standardization_action, source_type, source_ref,
+               category, department, tags, risk_level, applicability, status, owner_id, approved_by,
+               approved_at, effective_from, review_due_at, created_at, updated_at`,
+    [
+      tenantId,
+      code,
+      title,
+      payload.summary ?? null,
+      payload.problem_statement ?? null,
+      payload.root_cause ?? null,
+      payload.what_worked ?? null,
+      payload.what_failed ?? null,
+      payload.preventive_recommendation ?? null,
+      payload.standardization_action ?? null,
+      sourceType,
+      payload.source_ref ?? null,
+      payload.category ?? null,
+      payload.department ?? null,
+      JSON.stringify(tags),
+      riskLevel,
+      applicability,
+      status,
+      payload.owner_id ?? null,
+      approvedBy,
+      approvedAt,
+      payload.effective_from ?? null,
+      payload.review_due_at ?? null,
+      userId,
+    ]
+  );
+  const created = rows[0];
+  await logLessonEvent({
+    tenantId,
+    lessonId: Number(created.id),
+    eventType: 'Created',
+    message: `Lesson ${created.code} created`,
+    newData: created,
+    createdBy: userId,
+  });
+  return res.status(201).json(created);
+});
+
+router.put('/lessons/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const lessonId = Number(req.params.id);
+  if (!lessonId) {
+    return res.status(400).json({ detail: 'Invalid lesson id' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const currentResult = await pool.query(
+    `SELECT id, code, title, summary, problem_statement, root_cause, what_worked, what_failed,
+            preventive_recommendation, standardization_action, source_type, source_ref,
+            category, department, tags, risk_level, applicability, status, owner_id, approved_by,
+            approved_at, effective_from, review_due_at, created_at, updated_at
+     FROM lessons_learned
+     WHERE id = $1 AND tenant_id = $2`,
+    [lessonId, tenantId]
+  );
+  const current = currentResult.rows[0];
+  if (!current) {
+    return res.status(404).json({ detail: 'Lesson not found' });
+  }
+
+  const payload = req.body ?? {};
+  const fields = ([
+    ['title', payload.title],
+    ['summary', payload.summary],
+    ['problem_statement', payload.problem_statement],
+    ['root_cause', payload.root_cause],
+    ['what_worked', payload.what_worked],
+    ['what_failed', payload.what_failed],
+    ['preventive_recommendation', payload.preventive_recommendation],
+    ['standardization_action', payload.standardization_action],
+    ['source_type', payload.source_type],
+    ['source_ref', payload.source_ref],
+    ['category', payload.category],
+    ['department', payload.department],
+    ['risk_level', payload.risk_level],
+    ['applicability', payload.applicability],
+    ['status', payload.status],
+    ['owner_id', payload.owner_id],
+    ['effective_from', payload.effective_from],
+    ['review_due_at', payload.review_due_at],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+
+  if (payload.tags !== undefined) {
+    fields.push(['tags', JSON.stringify(normalizeTags(payload.tags))]);
+  }
+
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+
+  const sourceType = fields.find(([field]) => field === 'source_type')?.[1];
+  const riskLevel = fields.find(([field]) => field === 'risk_level')?.[1];
+  const applicability = fields.find(([field]) => field === 'applicability')?.[1];
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  if (sourceType !== undefined && !['Audit', 'NC', 'Complaint', 'Change', 'Manual'].includes(String(sourceType))) {
+    return res.status(400).json({ detail: 'Invalid source_type' });
+  }
+  if (riskLevel !== undefined && !['Low', 'Medium', 'High', 'Critical'].includes(String(riskLevel))) {
+    return res.status(400).json({ detail: 'Invalid risk_level' });
+  }
+  if (applicability !== undefined && !['Plant', 'Line', 'Product', 'Global'].includes(String(applicability))) {
+    return res.status(400).json({ detail: 'Invalid applicability' });
+  }
+  if (status !== undefined && !['Draft', 'Published', 'Archived'].includes(String(status))) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  const setClause = fields
+    .map(([field], index) => `${field} = ${field === 'tags' ? `$${index + 1}::jsonb` : `$${index + 1}`}`)
+    .join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE lessons_learned
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, code, title, summary, problem_statement, root_cause, what_worked, what_failed,
+               preventive_recommendation, standardization_action, source_type, source_ref,
+               category, department, tags, risk_level, applicability, status, owner_id, approved_by,
+               approved_at, effective_from, review_due_at, created_at, updated_at`,
+    [...values, lessonId, tenantId]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Lesson not found' });
+  }
+  const updated = rows[0];
+  await logLessonEvent({
+    tenantId,
+    lessonId,
+    eventType: 'Updated',
+    message: `Lesson ${updated.code} updated`,
+    oldData: current,
+    newData: updated,
+    createdBy: userId,
+  });
+  return res.json(updated);
+});
+
+router.post('/lessons/:id/publish', requireAuth, async (req: AuthedRequest, res) => {
+  const role = String(req.user?.role ?? '').trim().toLowerCase();
+  if (!['manager', 'admin', 'super admin'].includes(role)) {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const lessonId = Number(req.params.id);
+  if (!lessonId) {
+    return res.status(400).json({ detail: 'Invalid lesson id' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const { rows } = await pool.query(
+    `UPDATE lessons_learned
+     SET status = 'Published',
+         approved_by = $1,
+         approved_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $2 AND tenant_id = $3
+     RETURNING id, code, status, approved_by, approved_at`,
+    [userId, lessonId, tenantId]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Lesson not found' });
+  }
+  await logLessonEvent({
+    tenantId,
+    lessonId,
+    eventType: 'Published',
+    message: `Lesson ${rows[0].code} published`,
+    newData: rows[0],
+    createdBy: userId,
+  });
+  return res.json(rows[0]);
+});
+
+router.post('/lessons/:id/archive', requireAuth, async (req: AuthedRequest, res) => {
+  const role = String(req.user?.role ?? '').trim().toLowerCase();
+  if (!['manager', 'admin', 'super admin'].includes(role)) {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const lessonId = Number(req.params.id);
+  if (!lessonId) {
+    return res.status(400).json({ detail: 'Invalid lesson id' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  const userId = Number(req.user?.sub ?? 0) || null;
+  const { rows } = await pool.query(
+    `UPDATE lessons_learned
+     SET status = 'Archived', updated_at = NOW()
+     WHERE id = $1 AND tenant_id = $2
+     RETURNING id, code, status`,
+    [lessonId, tenantId]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Lesson not found' });
+  }
+  await logLessonEvent({
+    tenantId,
+    lessonId,
+    eventType: 'Archived',
+    message: `Lesson ${rows[0].code} archived`,
+    newData: rows[0],
+    createdBy: userId,
+  });
+  return res.json(rows[0]);
+});
+
+router.post('/lessons/:id/acknowledge', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const lessonId = Number(req.params.id);
+  const userId = Number(req.user?.sub ?? 0);
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+  if (!lessonId || !userId) {
+    return res.status(400).json({ detail: 'Invalid request' });
+  }
+  const lessonQuery = await pool.query(
+    `SELECT id, code, status
+     FROM lessons_learned
+     WHERE id = $1 AND tenant_id = $2`,
+    [lessonId, tenantId]
+  );
+  const lesson = lessonQuery.rows[0];
+  if (!lesson) {
+    return res.status(404).json({ detail: 'Lesson not found' });
+  }
+  await pool.query(
+    `INSERT INTO lesson_acknowledgements
+      (tenant_id, lesson_id, user_id, acknowledged_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (tenant_id, lesson_id, user_id)
+     DO UPDATE SET acknowledged_at = NOW()`,
+    [tenantId, lessonId, userId]
+  );
+  await logLessonEvent({
+    tenantId,
+    lessonId,
+    eventType: 'Acknowledged',
+    message: `Lesson ${lesson.code} acknowledged`,
+    createdBy: userId,
+  });
+  return res.json({ detail: 'Acknowledged' });
+});
+
+router.get('/lessons/:id/ack-status', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const lessonId = Number(req.params.id);
+  if (!lessonId) {
+    return res.status(400).json({ detail: 'Invalid lesson id' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+
+  const lessonResult = await pool.query(
+    `SELECT id, department
+     FROM lessons_learned
+     WHERE id = $1 AND tenant_id = $2`,
+    [lessonId, tenantId]
+  );
+  const lesson = lessonResult.rows[0];
+  if (!lesson) {
+    return res.status(404).json({ detail: 'Lesson not found' });
+  }
+
+  const department = String(lesson.department ?? '').trim();
+  const userQuery = await pool.query(
+    `SELECT id
+     FROM users
+     WHERE tenant_id = $1
+       AND status = 'Active'
+       ${department ? 'AND department = $2' : ''}`,
+    department ? [tenantId, department] : [tenantId]
+  );
+  const totalUsers = userQuery.rows.length;
+  const ackQuery = await pool.query(
+    `SELECT user_id, acknowledged_at
+     FROM lesson_acknowledgements
+     WHERE tenant_id = $1 AND lesson_id = $2`,
+    [tenantId, lessonId]
+  );
+  return res.json({
+    total_users: totalUsers,
+    acknowledged_count: ackQuery.rows.length,
+    acknowledgements: ackQuery.rows,
+  });
+});
+
+router.get('/instruments', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, code, name, instrument_type, serial_number, location, owner_department,
+            calibration_frequency_days, last_calibrated_at, next_calibration_due,
+            status, remarks, created_at, updated_at
+     FROM instruments
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/instruments', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const name = String(payload.name ?? '').trim();
+  if (!name) {
+    return res.status(400).json({ detail: 'name is required' });
+  }
+  const frequencyDays = Math.max(1, Math.floor(Number(payload.calibration_frequency_days ?? 180)));
+  const status = String(payload.status ?? 'Active').trim();
+  if (!['Active', 'Inactive', 'Out of Service'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+  const lastCalibratedAt = String(payload.last_calibrated_at ?? '').trim();
+  const baseline = lastCalibratedAt ? new Date(lastCalibratedAt) : new Date();
+  const nextDue = new Date(baseline.getTime() + frequencyDays * 24 * 60 * 60 * 1000);
+
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = generateInstrumentCode();
+    const exists = await pool.query(
+      'SELECT 1 FROM instruments WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+      [req.user?.tenant_id, code]
+    );
+    if (!exists.rows.length) {
+      break;
+    }
+    code = '';
+  }
+  if (!code) {
+    return res.status(500).json({ detail: 'Unable to generate instrument code' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO instruments
+      (tenant_id, code, name, instrument_type, serial_number, location, owner_department,
+       calibration_frequency_days, last_calibrated_at, next_calibration_due, status, remarks,
+       created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+     RETURNING id, code, name, instrument_type, serial_number, location, owner_department,
+               calibration_frequency_days, last_calibrated_at, next_calibration_due,
+               status, remarks, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      code,
+      name,
+      payload.instrument_type ?? null,
+      payload.serial_number ?? null,
+      payload.location ?? null,
+      payload.owner_department ?? null,
+      frequencyDays,
+      lastCalibratedAt || null,
+      nextDue.toISOString().slice(0, 10),
+      status,
+      payload.remarks ?? null,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/instruments/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid instrument id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['name', payload.name],
+    ['instrument_type', payload.instrument_type],
+    ['serial_number', payload.serial_number],
+    ['location', payload.location],
+    ['owner_department', payload.owner_department],
+    ['calibration_frequency_days', payload.calibration_frequency_days],
+    ['last_calibrated_at', payload.last_calibrated_at],
+    ['next_calibration_due', payload.next_calibration_due],
+    ['status', payload.status],
+    ['remarks', payload.remarks],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  if (status !== undefined && !['Active', 'Inactive', 'Out of Service'].includes(String(status))) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+  const frequency = fields.find(([field]) => field === 'calibration_frequency_days')?.[1];
+  if (frequency !== undefined && Number(frequency) < 1) {
+    return res.status(400).json({ detail: 'Invalid calibration_frequency_days' });
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE instruments
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, code, name, instrument_type, serial_number, location, owner_department,
+               calibration_frequency_days, last_calibrated_at, next_calibration_due,
+               status, remarks, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Instrument not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/instruments/:id/calibrations', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const instrumentId = Number(req.params.id);
+  if (!instrumentId) {
+    return res.status(400).json({ detail: 'Invalid instrument id' });
+  }
+  const instrumentQuery = await pool.query(
+    `SELECT id
+     FROM instruments
+     WHERE id = $1 AND tenant_id = $2`,
+    [instrumentId, req.user?.tenant_id]
+  );
+  if (!instrumentQuery.rows.length) {
+    return res.status(404).json({ detail: 'Instrument not found' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, instrument_id, calibration_date, calibrated_by, result, certificate_no,
+            notes, next_due_date, created_at
+     FROM instrument_calibrations
+     WHERE instrument_id = $1 AND tenant_id = $2
+     ORDER BY calibration_date DESC`,
+    [instrumentId, req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/instruments/:id/calibrations', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const instrumentId = Number(req.params.id);
+  if (!instrumentId) {
+    return res.status(400).json({ detail: 'Invalid instrument id' });
+  }
+  const payload = req.body ?? {};
+  const calibrationDate = String(payload.calibration_date ?? '').trim();
+  if (!calibrationDate) {
+    return res.status(400).json({ detail: 'calibration_date is required' });
+  }
+  const result = String(payload.result ?? 'Pass').trim();
+  if (!['Pass', 'Fail', 'Conditional'].includes(result)) {
+    return res.status(400).json({ detail: 'Invalid result' });
+  }
+  const instrumentQuery = await pool.query(
+    `SELECT id, calibration_frequency_days
+     FROM instruments
+     WHERE id = $1 AND tenant_id = $2`,
+    [instrumentId, req.user?.tenant_id]
+  );
+  const instrument = instrumentQuery.rows[0];
+  if (!instrument) {
+    return res.status(404).json({ detail: 'Instrument not found' });
+  }
+
+  const frequencyDays = Math.max(1, Number(instrument.calibration_frequency_days ?? 180));
+  const baseline = new Date(calibrationDate);
+  const nextDueDate = new Date(baseline.getTime() + frequencyDays * 24 * 60 * 60 * 1000);
+
+  const { rows } = await pool.query(
+    `INSERT INTO instrument_calibrations
+      (tenant_id, instrument_id, calibration_date, calibrated_by, result, certificate_no,
+       notes, next_due_date, created_by, created_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+     RETURNING id, instrument_id, calibration_date, calibrated_by, result, certificate_no,
+               notes, next_due_date, created_at`,
+    [
+      req.user?.tenant_id,
+      instrumentId,
+      calibrationDate,
+      payload.calibrated_by ?? null,
+      result,
+      payload.certificate_no ?? null,
+      payload.notes ?? null,
+      nextDueDate.toISOString().slice(0, 10),
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+
+  await pool.query(
+    `UPDATE instruments
+     SET last_calibrated_at = $1,
+         next_calibration_due = $2,
+         updated_at = NOW()
+     WHERE id = $3 AND tenant_id = $4`,
+    [calibrationDate, nextDueDate.toISOString().slice(0, 10), instrumentId, req.user?.tenant_id]
+  );
+
+  return res.status(201).json(rows[0]);
+});
+
+router.get('/suppliers', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, code, name, category, contact_name, contact_email, contact_phone,
+            status, created_at, updated_at
+     FROM suppliers
+     WHERE tenant_id = $1
+     ORDER BY created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/suppliers', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const name = String(payload.name ?? '').trim();
+  if (!name) {
+    return res.status(400).json({ detail: 'name is required' });
+  }
+  const status = String(payload.status ?? 'Active').trim();
+  if (!['Active', 'Inactive', 'Blocked'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = generateSupplierCode();
+    const exists = await pool.query(
+      'SELECT 1 FROM suppliers WHERE tenant_id = $1 AND code = $2 LIMIT 1',
+      [req.user?.tenant_id, code]
+    );
+    if (!exists.rows.length) {
+      break;
+    }
+    code = '';
+  }
+  if (!code) {
+    return res.status(500).json({ detail: 'Unable to generate supplier code' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO suppliers
+      (tenant_id, code, name, category, contact_name, contact_email, contact_phone,
+       status, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+     RETURNING id, code, name, category, contact_name, contact_email, contact_phone,
+               status, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      code,
+      name,
+      payload.category ?? null,
+      payload.contact_name ?? null,
+      payload.contact_email ?? null,
+      payload.contact_phone ?? null,
+      status,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/suppliers/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid supplier id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['name', payload.name],
+    ['category', payload.category],
+    ['contact_name', payload.contact_name],
+    ['contact_email', payload.contact_email],
+    ['contact_phone', payload.contact_phone],
+    ['status', payload.status],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  if (status !== undefined && !['Active', 'Inactive', 'Blocked'].includes(String(status))) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE suppliers
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, code, name, category, contact_name, contact_email, contact_phone,
+               status, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Supplier not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/supplier-ppap', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT p.id, p.supplier_id, s.code AS supplier_code, s.name AS supplier_name, p.part_no, p.level,
+            p.submission_date, p.approval_status, p.approved_by, p.approved_at, p.remarks,
+            p.created_at, p.updated_at
+     FROM supplier_ppap p
+     JOIN suppliers s ON s.id = p.supplier_id
+     WHERE p.tenant_id = $1
+     ORDER BY p.created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/supplier-ppap', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const supplierId = Number(payload.supplier_id);
+  const partNo = String(payload.part_no ?? '').trim();
+  if (!supplierId) {
+    return res.status(400).json({ detail: 'supplier_id is required' });
+  }
+  if (!partNo) {
+    return res.status(400).json({ detail: 'part_no is required' });
+  }
+  const approvalStatus = String(payload.approval_status ?? 'Pending').trim();
+  if (!['Pending', 'Approved', 'Rejected'].includes(approvalStatus)) {
+    return res.status(400).json({ detail: 'Invalid approval_status' });
+  }
+
+  const supplierQuery = await pool.query(
+    'SELECT id FROM suppliers WHERE id = $1 AND tenant_id = $2',
+    [supplierId, req.user?.tenant_id]
+  );
+  if (!supplierQuery.rows.length) {
+    return res.status(404).json({ detail: 'Supplier not found' });
+  }
+
+  const approvedAt = approvalStatus === 'Approved' ? new Date().toISOString() : null;
+  const { rows } = await pool.query(
+    `INSERT INTO supplier_ppap
+      (tenant_id, supplier_id, part_no, level, submission_date, approval_status,
+       approved_by, approved_at, remarks, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+     RETURNING id, supplier_id, part_no, level, submission_date, approval_status,
+               approved_by, approved_at, remarks, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      supplierId,
+      partNo,
+      payload.level ?? 'Level 3',
+      payload.submission_date ?? null,
+      approvalStatus,
+      payload.approved_by ?? null,
+      approvedAt,
+      payload.remarks ?? null,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/supplier-ppap/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid PPAP id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['part_no', payload.part_no],
+    ['level', payload.level],
+    ['submission_date', payload.submission_date],
+    ['approval_status', payload.approval_status],
+    ['approved_by', payload.approved_by],
+    ['remarks', payload.remarks],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+  const approvalStatus = fields.find(([field]) => field === 'approval_status')?.[1];
+  if (approvalStatus !== undefined && !['Pending', 'Approved', 'Rejected'].includes(String(approvalStatus))) {
+    return res.status(400).json({ detail: 'Invalid approval_status' });
+  }
+  if (approvalStatus !== undefined) {
+    fields.push(['approved_at', String(approvalStatus) === 'Approved' ? new Date().toISOString() : null]);
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE supplier_ppap
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, supplier_id, part_no, level, submission_date, approval_status,
+               approved_by, approved_at, remarks, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'PPAP record not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/supplier-performance', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT p.id, p.supplier_id, s.code AS supplier_code, s.name AS supplier_name, p.period_month,
+            p.quality_score, p.delivery_score, p.service_score, p.total_score, p.remarks,
+            p.created_at, p.updated_at
+     FROM supplier_performance p
+     JOIN suppliers s ON s.id = p.supplier_id
+     WHERE p.tenant_id = $1
+     ORDER BY p.period_month DESC, p.created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/supplier-performance', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const supplierId = Number(payload.supplier_id);
+  const periodMonth = String(payload.period_month ?? '').trim();
+  if (!supplierId) {
+    return res.status(400).json({ detail: 'supplier_id is required' });
+  }
+  if (!periodMonth) {
+    return res.status(400).json({ detail: 'period_month is required' });
+  }
+  const supplierQuery = await pool.query(
+    'SELECT id FROM suppliers WHERE id = $1 AND tenant_id = $2',
+    [supplierId, req.user?.tenant_id]
+  );
+  if (!supplierQuery.rows.length) {
+    return res.status(404).json({ detail: 'Supplier not found' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO supplier_performance
+      (tenant_id, supplier_id, period_month, quality_score, delivery_score, service_score,
+       remarks, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+     RETURNING id, supplier_id, period_month, quality_score, delivery_score, service_score,
+               total_score, remarks, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      supplierId,
+      periodMonth,
+      Number(payload.quality_score ?? 0),
+      Number(payload.delivery_score ?? 0),
+      Number(payload.service_score ?? 0),
+      payload.remarks ?? null,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/supplier-performance/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid performance id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['period_month', payload.period_month],
+    ['quality_score', payload.quality_score],
+    ['delivery_score', payload.delivery_score],
+    ['service_score', payload.service_score],
+    ['remarks', payload.remarks],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE supplier_performance
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, supplier_id, period_month, quality_score, delivery_score, service_score,
+               total_score, remarks, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Performance record not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/supplier-ppm', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT p.id, p.supplier_id, s.code AS supplier_code, s.name AS supplier_name, p.period_month,
+            p.delivered_qty, p.defective_qty, p.ppm, p.remarks, p.created_at, p.updated_at
+     FROM supplier_ppm p
+     JOIN suppliers s ON s.id = p.supplier_id
+     WHERE p.tenant_id = $1
+     ORDER BY p.period_month DESC, p.created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/supplier-ppm', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const supplierId = Number(payload.supplier_id);
+  const periodMonth = String(payload.period_month ?? '').trim();
+  if (!supplierId) {
+    return res.status(400).json({ detail: 'supplier_id is required' });
+  }
+  if (!periodMonth) {
+    return res.status(400).json({ detail: 'period_month is required' });
+  }
+  const deliveredQty = Math.max(0, Math.floor(Number(payload.delivered_qty ?? 0)));
+  const defectiveQty = Math.max(0, Math.floor(Number(payload.defective_qty ?? 0)));
+  if (defectiveQty > deliveredQty) {
+    return res.status(400).json({ detail: 'defective_qty cannot exceed delivered_qty' });
+  }
+  const supplierQuery = await pool.query(
+    'SELECT id FROM suppliers WHERE id = $1 AND tenant_id = $2',
+    [supplierId, req.user?.tenant_id]
+  );
+  if (!supplierQuery.rows.length) {
+    return res.status(404).json({ detail: 'Supplier not found' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO supplier_ppm
+      (tenant_id, supplier_id, period_month, delivered_qty, defective_qty, remarks,
+       created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+     RETURNING id, supplier_id, period_month, delivered_qty, defective_qty, ppm,
+               remarks, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      supplierId,
+      periodMonth,
+      deliveredQty,
+      defectiveQty,
+      payload.remarks ?? null,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/supplier-ppm/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid PPM id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['period_month', payload.period_month],
+    ['delivered_qty', payload.delivered_qty],
+    ['defective_qty', payload.defective_qty],
+    ['remarks', payload.remarks],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+
+  const deliveredQty = fields.find(([field]) => field === 'delivered_qty')?.[1];
+  const defectiveQty = fields.find(([field]) => field === 'defective_qty')?.[1];
+  if (deliveredQty !== undefined && Number(deliveredQty) < 0) {
+    return res.status(400).json({ detail: 'Invalid delivered_qty' });
+  }
+  if (defectiveQty !== undefined && Number(defectiveQty) < 0) {
+    return res.status(400).json({ detail: 'Invalid defective_qty' });
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE supplier_ppm
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, supplier_id, period_month, delivered_qty, defective_qty, ppm,
+               remarks, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'PPM record not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/supplier-audits', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const { rows } = await pool.query(
+    `SELECT a.id, a.supplier_id, s.code AS supplier_code, s.name AS supplier_name, a.audit_date,
+            a.audit_type, a.auditor_name, a.score, a.status, a.findings, a.action_owner,
+            a.target_close_date, a.created_at, a.updated_at
+     FROM supplier_audits a
+     JOIN suppliers s ON s.id = a.supplier_id
+     WHERE a.tenant_id = $1
+     ORDER BY a.audit_date DESC, a.created_at DESC`,
+    [req.user?.tenant_id]
+  );
+  return res.json(rows);
+});
+
+router.post('/supplier-audits', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const payload = req.body ?? {};
+  const supplierId = Number(payload.supplier_id);
+  const auditDate = String(payload.audit_date ?? '').trim();
+  if (!supplierId) {
+    return res.status(400).json({ detail: 'supplier_id is required' });
+  }
+  if (!auditDate) {
+    return res.status(400).json({ detail: 'audit_date is required' });
+  }
+  const status = String(payload.status ?? 'Planned').trim();
+  if (!['Planned', 'In Progress', 'Closed'].includes(status)) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+  const supplierQuery = await pool.query(
+    'SELECT id FROM suppliers WHERE id = $1 AND tenant_id = $2',
+    [supplierId, req.user?.tenant_id]
+  );
+  if (!supplierQuery.rows.length) {
+    return res.status(404).json({ detail: 'Supplier not found' });
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO supplier_audits
+      (tenant_id, supplier_id, audit_date, audit_type, auditor_name, score, status,
+       findings, action_owner, target_close_date, created_by, created_at, updated_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+     RETURNING id, supplier_id, audit_date, audit_type, auditor_name, score, status,
+               findings, action_owner, target_close_date, created_at, updated_at`,
+    [
+      req.user?.tenant_id,
+      supplierId,
+      auditDate,
+      payload.audit_type ?? null,
+      payload.auditor_name ?? null,
+      payload.score ?? null,
+      status,
+      payload.findings ?? null,
+      payload.action_owner ?? null,
+      payload.target_close_date ?? null,
+      Number(req.user?.sub ?? 0) || null,
+    ]
+  );
+  return res.status(201).json(rows[0]);
+});
+
+router.put('/supplier-audits/:id', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const id = Number(req.params.id);
+  if (!id) {
+    return res.status(400).json({ detail: 'Invalid supplier audit id' });
+  }
+  const payload = req.body ?? {};
+  const fields = ([
+    ['audit_date', payload.audit_date],
+    ['audit_type', payload.audit_type],
+    ['auditor_name', payload.auditor_name],
+    ['score', payload.score],
+    ['status', payload.status],
+    ['findings', payload.findings],
+    ['action_owner', payload.action_owner],
+    ['target_close_date', payload.target_close_date],
+  ] as [string, unknown][]).filter(([, value]) => value !== undefined);
+  if (!fields.length) {
+    return res.status(400).json({ detail: 'No updates provided' });
+  }
+  const status = fields.find(([field]) => field === 'status')?.[1];
+  if (status !== undefined && !['Planned', 'In Progress', 'Closed'].includes(String(status))) {
+    return res.status(400).json({ detail: 'Invalid status' });
+  }
+
+  const setClause = fields.map(([field], index) => `${field} = $${index + 1}`).join(', ');
+  const values = fields.map(([, value]) => value);
+  const { rows } = await pool.query(
+    `UPDATE supplier_audits
+     SET ${setClause}, updated_at = NOW()
+     WHERE id = $${values.length + 1} AND tenant_id = $${values.length + 2}
+     RETURNING id, supplier_id, audit_date, audit_type, auditor_name, score, status,
+               findings, action_owner, target_close_date, created_at, updated_at`,
+    [...values, id, req.user?.tenant_id]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ detail: 'Supplier audit not found' });
+  }
+  return res.json(rows[0]);
+});
+
+router.get('/supplier-worst', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 10), 1), 50);
+  const { rows } = await pool.query(
+    `SELECT s.id, s.code, s.name,
+            COALESCE(ppm.avg_ppm, 0)::numeric(12,2) AS avg_ppm,
+            COALESCE(perf.avg_total_score, 0)::numeric(6,2) AS avg_total_score,
+            (COALESCE(ppm.avg_ppm, 0) + (300 - LEAST(COALESCE(perf.avg_total_score, 0), 300)) * 100)::numeric(14,2) AS risk_index,
+            aud.status AS latest_audit_status,
+            aud.audit_date AS latest_audit_date
+     FROM suppliers s
+     LEFT JOIN LATERAL (
+       SELECT AVG(spm.ppm) AS avg_ppm
+       FROM supplier_ppm spm
+       WHERE spm.tenant_id = s.tenant_id AND spm.supplier_id = s.id
+     ) ppm ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT AVG(sp.total_score) AS avg_total_score
+       FROM supplier_performance sp
+       WHERE sp.tenant_id = s.tenant_id AND sp.supplier_id = s.id
+     ) perf ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT sa.status, sa.audit_date
+       FROM supplier_audits sa
+       WHERE sa.tenant_id = s.tenant_id AND sa.supplier_id = s.id
+       ORDER BY sa.audit_date DESC NULLS LAST, sa.created_at DESC
+       LIMIT 1
+     ) aud ON TRUE
+     WHERE s.tenant_id = $1
+     ORDER BY risk_index DESC, avg_ppm DESC, avg_total_score ASC
+     LIMIT $2`,
+    [req.user?.tenant_id, limit]
+  );
+  return res.json(rows);
+});
+
+router.get('/supplier-dashboard', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user?.role === 'Customer') {
+    return res.status(403).json({ detail: 'Not authorized' });
+  }
+  const tenantId = Number(req.user?.tenant_id ?? 0);
+
+  const [kpiResult, monthlyPpmResult, worstSupplierResult, ppapAgingResult] = await Promise.all([
+    pool.query(
+      `SELECT
+          COUNT(*)::int AS total_suppliers,
+          COUNT(*) FILTER (WHERE status = 'Active')::int AS active_suppliers,
+          (SELECT COUNT(*)::int FROM supplier_ppap WHERE tenant_id = $1 AND approval_status = 'Pending') AS pending_ppap,
+          (SELECT COUNT(*)::int FROM supplier_audits WHERE tenant_id = $1 AND status <> 'Closed') AS open_supplier_audits
+       FROM suppliers
+       WHERE tenant_id = $1`,
+      [tenantId]
+    ),
+    pool.query(
+      `WITH months AS (
+         SELECT generate_series(
+           date_trunc('month', CURRENT_DATE) - INTERVAL '5 months',
+           date_trunc('month', CURRENT_DATE),
+           INTERVAL '1 month'
+         )::date AS month_start
+       )
+       SELECT to_char(m.month_start, 'Mon YYYY') AS label,
+              COALESCE(AVG(spm.ppm), 0)::numeric(12,2) AS avg_ppm
+       FROM months m
+       LEFT JOIN supplier_ppm spm
+         ON spm.tenant_id = $1
+        AND date_trunc('month', spm.period_month) = m.month_start
+       GROUP BY m.month_start
+       ORDER BY m.month_start`,
+      [tenantId]
+    ),
+    pool.query(
+      `SELECT s.id, s.code, s.name,
+              COALESCE(ppm.avg_ppm, 0)::numeric(12,2) AS avg_ppm,
+              COALESCE(perf.avg_total_score, 0)::numeric(6,2) AS avg_total_score,
+              (COALESCE(ppm.avg_ppm, 0) + (300 - LEAST(COALESCE(perf.avg_total_score, 0), 300)) * 100)::numeric(14,2) AS risk_index
+       FROM suppliers s
+       LEFT JOIN LATERAL (
+         SELECT AVG(spm.ppm) AS avg_ppm
+         FROM supplier_ppm spm
+         WHERE spm.tenant_id = s.tenant_id AND spm.supplier_id = s.id
+       ) ppm ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT AVG(sp.total_score) AS avg_total_score
+         FROM supplier_performance sp
+         WHERE sp.tenant_id = s.tenant_id AND sp.supplier_id = s.id
+       ) perf ON TRUE
+       WHERE s.tenant_id = $1
+       ORDER BY risk_index DESC, avg_ppm DESC, avg_total_score ASC
+       LIMIT 5`,
+      [tenantId]
+    ),
+    pool.query(
+      `SELECT
+          SUM(CASE WHEN age_days BETWEEN 0 AND 7 THEN 1 ELSE 0 END)::int AS bucket_0_7,
+          SUM(CASE WHEN age_days BETWEEN 8 AND 15 THEN 1 ELSE 0 END)::int AS bucket_8_15,
+          SUM(CASE WHEN age_days BETWEEN 16 AND 30 THEN 1 ELSE 0 END)::int AS bucket_16_30,
+          SUM(CASE WHEN age_days > 30 THEN 1 ELSE 0 END)::int AS bucket_gt_30
+       FROM (
+         SELECT (CURRENT_DATE - COALESCE(submission_date, created_at::date))::int AS age_days
+         FROM supplier_ppap
+         WHERE tenant_id = $1
+           AND approval_status = 'Pending'
+       ) pending_ppap`,
+      [tenantId]
+    ),
+  ]);
+
+  return res.json({
+    kpis: kpiResult.rows[0] ?? {
+      total_suppliers: 0,
+      active_suppliers: 0,
+      pending_ppap: 0,
+      open_supplier_audits: 0,
+    },
+    monthly_ppm_trend: monthlyPpmResult.rows,
+    top_worst_suppliers: worstSupplierResult.rows,
+    ppap_approval_aging: ppapAgingResult.rows[0] ?? {
+      bucket_0_7: 0,
+      bucket_8_15: 0,
+      bucket_16_30: 0,
+      bucket_gt_30: 0,
+    },
+  });
 });
 
 router.post('/audit-plans', requireAuth, async (req: AuthedRequest, res) => {

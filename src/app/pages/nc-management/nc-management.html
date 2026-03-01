@@ -161,6 +161,13 @@
             >
               Perform NC
             </button>
+            <a
+              class="ghost small link-button"
+              [routerLink]="['/lessons']"
+              [queryParams]="{ source_type: 'NC', source_ref: record.auditCode + '-A' + record.answerId, title: record.question }"
+            >
+              Create lesson
+            </a>
           </div>
         </div>
       </article>
