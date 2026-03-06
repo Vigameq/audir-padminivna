@@ -4277,15 +4277,20 @@ router.post('/nc-actions', requireAuth, async (req: AuthedRequest, res) => {
     return res.status(401).json({ detail: 'Invalid user' });
   }
   const auditQuery = await pool.query(
-    `SELECT p.auditor_name, a.assigned_nc
+    `SELECT p.auditor_name, a.assigned_nc, n.assigned_user_id
      FROM audit_answers a
      JOIN audit_plans p ON p.id = a.audit_plan_id
+     LEFT JOIN nc_actions n ON n.audit_answer_id = a.id AND n.tenant_id = a.tenant_id
      WHERE a.id = $1 AND a.tenant_id = $2`,
     [answerId, req.user?.tenant_id]
   );
   const auditRow = auditQuery.rows[0];
   const auditorName = String(auditRow?.auditor_name ?? '').toLowerCase();
   const assignedDepartment = String(auditRow?.assigned_nc ?? '').toLowerCase();
+  const currentAssignedUserId =
+    auditRow?.assigned_user_id !== undefined && auditRow?.assigned_user_id !== null
+      ? Number(auditRow.assigned_user_id)
+      : null;
   const userFullName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim().toLowerCase();
   const userRole = String(req.user?.role ?? '').trim().toLowerCase();
   if (assignedUserId) {
@@ -4299,9 +4304,17 @@ router.post('/nc-actions', requireAuth, async (req: AuthedRequest, res) => {
       return res.status(400).json({ detail: 'Invalid assignee for department' });
     }
   }
-  if (requestedStatus === 'Closed' || requestedStatus === 'Rework') {
+  if (requestedStatus === 'Closed') {
     if (userRole !== 'manager' && (!userFullName || userFullName !== auditorName)) {
       return res.status(403).json({ detail: 'Not authorized to change status' });
+    }
+  }
+  if (requestedStatus === 'Rework') {
+    const isAuditor = !!userFullName && userFullName === auditorName;
+    const isManager = userRole === 'manager';
+    const isAssignedUser = !!currentAssignedUserId && currentAssignedUserId === userId;
+    if (!isManager && !isAuditor && !isAssignedUser) {
+      return res.status(403).json({ detail: 'Not authorized to reject this NC' });
     }
   }
   if (requestedStatus === 'Resolution Submitted' || requestedStatus === 'In Progress') {

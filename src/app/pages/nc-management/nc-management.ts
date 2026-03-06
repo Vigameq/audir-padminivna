@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthState } from '../../auth-state';
@@ -22,7 +22,7 @@ export class NcManagement implements OnInit {
   protected activeRecord: NcRecord | null = null;
   protected viewRecord: NcRecord | null = null;
   protected activeTab: 'flagged' | 'pending' | 'closed' = 'flagged';
-  protected assignedFilter = '';
+  protected searchQuery = '';
   protected readonly currentUserId = signal<number | null>(null);
   protected ncResponse = {
     rootCause: '',
@@ -41,62 +41,39 @@ export class NcManagement implements OnInit {
     { id: number; name?: string; email?: string }
   > = {};
   protected pendingAssignedNc: Record<string, string> = {};
+  protected openActionMenuFor: string | null = null;
+  protected rejectRecord: NcRecord | null = null;
+  protected rejectReason = '';
+  protected rejectSubmitting = false;
   private usersLoaded = false;
   private usersLoading = false;
   private targetAnswerId: string | null = null;
   private targetTab: 'flagged' | 'pending' | 'closed' | null = null;
 
   protected readonly ncRecords = computed(() => {
-    const records = this.ncService.records();
-    const currentUserId = this.currentUserId();
-    let department = this.auth.department().trim().toLowerCase();
-    if (!department && currentUserId) {
-      const currentUser = this.users.find((user) => user.id === currentUserId);
-      department = String(currentUser?.department ?? '').trim().toLowerCase();
-    }
-    const filtered = records.filter((record) => {
+    const records = this.visibleDepartmentRecords();
+    return records.filter((record) => {
       const status = (record.status || 'Assigned').toLowerCase();
       const allowed = status === 'assigned' || status === 'rework' || status === 'in progress';
       if (!allowed) {
         return false;
       }
-      const assignedUserId = record.assignedUserId;
-      if (assignedUserId && currentUserId && assignedUserId === currentUserId) {
-        return true;
-      }
-      if (!department) {
-        return false;
-      }
-      return record.assignedNc?.trim().toLowerCase() === department;
+      return this.matchesSearch(record);
     });
-    const filterValue = this.assignedFilter.trim().toLowerCase();
-    if (!filterValue) {
-      return filtered;
-    }
-    return filtered.filter((record) => record.assignedNc?.trim().toLowerCase() === filterValue);
   });
 
   protected readonly pendingReviewRecords = computed(() => {
-    const records = this.ncService.records().filter((record) => {
+    const records = this.visibleDepartmentRecords().filter((record) => {
       const status = (record.status || '').toLowerCase();
-      return status === 'resolution submitted';
+      return status === 'resolution submitted' && this.matchesSearch(record);
     });
-    if (this.auth.role() !== 'Auditor') {
-      return records;
-    }
-    const fullName = `${this.auth.firstName()} ${this.auth.lastName()}`.trim().toLowerCase();
-    if (!fullName) {
-      return [];
-    }
-    return records.filter(
-      (record) => record.auditorName.trim().toLowerCase() === fullName
-    );
+    return records;
   });
 
   protected readonly closedRecords = computed(() => {
-    return this.ncService.records().filter((record) => {
+    return this.visibleDepartmentRecords().filter((record) => {
       const status = (record.status || '').toLowerCase();
-      return status === 'closed';
+      return status === 'closed' && this.matchesSearch(record);
     });
   });
 
@@ -155,6 +132,7 @@ export class NcManagement implements OnInit {
   }
 
   protected openRecord(record: NcRecord): void {
+    this.openActionMenuFor = null;
     this.viewRecord = null;
     this.activeRecord = record;
     this.ncResponse = {
@@ -174,6 +152,89 @@ export class NcManagement implements OnInit {
 
   protected closeRecord(): void {
     this.activeRecord = null;
+  }
+
+  protected toggleActionMenu(record: NcRecord): void {
+    this.openActionMenuFor =
+      this.openActionMenuFor === record.answerId ? null : record.answerId;
+  }
+
+  protected isActionMenuOpen(record: NcRecord): boolean {
+    return this.openActionMenuFor === record.answerId;
+  }
+
+  protected chooseAction(record: NcRecord, action: 'perform' | 'reject'): void {
+    this.openActionMenuFor = null;
+    if (action === 'perform') {
+      this.openRecord(record);
+      return;
+    }
+    this.openRejectModal(record);
+  }
+
+  @HostListener('document:click', ['$event'])
+  protected onDocumentClick(event: MouseEvent): void {
+    if (!this.openActionMenuFor) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.action-menu')) {
+      return;
+    }
+    this.openActionMenuFor = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  protected onEscape(): void {
+    this.openActionMenuFor = null;
+  }
+
+  protected openRejectModal(record: NcRecord): void {
+    this.rejectRecord = record;
+    this.rejectReason = '';
+  }
+
+  protected closeRejectModal(): void {
+    this.rejectRecord = null;
+    this.rejectReason = '';
+    this.rejectSubmitting = false;
+  }
+
+  protected submitReject(): void {
+    if (!this.rejectRecord || this.rejectSubmitting) {
+      return;
+    }
+    const reason = this.rejectReason.trim();
+    if (!reason) {
+      window.alert('Please provide a reject reason.');
+      return;
+    }
+    this.rejectSubmitting = true;
+    this.ncService
+      .upsertAction({
+        answer_id: this.rejectRecord.answerId,
+        root_cause: this.rejectRecord.rootCause || null,
+        containment_action: this.rejectRecord.containmentAction || null,
+        corrective_action: this.rejectRecord.correctiveAction || null,
+        preventive_action: this.rejectRecord.preventiveAction || null,
+        evidence_name: this.rejectRecord.evidenceName || null,
+        gd_summary: reason,
+        fishbone_data: this.rejectRecord.fishboneData ?? this.createEmptyFishbone(),
+        why_why_data: this.mergeWhyWhy(this.rejectRecord.whyWhyData ?? []),
+        assigned_user_id: null,
+        status: 'Rework',
+      })
+      .subscribe({
+        next: () => {
+          this.closeRejectModal();
+          this.ncService.listRecords().subscribe();
+        },
+        error: (error) => {
+          const detail = String(error?.error?.detail ?? 'Unable to reject NC. Please try again.');
+          window.alert(detail);
+          this.rejectSubmitting = false;
+        },
+      });
   }
 
   protected openReview(record: NcRecord): void {
@@ -288,43 +349,80 @@ export class NcManagement implements OnInit {
   protected canPerformNc(record: NcRecord): boolean {
     const assignedId = this.getAssignedUserId(record);
     const email = this.auth.email().trim().toLowerCase();
+    const currentName = `${this.auth.firstName()} ${this.auth.lastName()}`
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+    const tokenUserId = this.getTokenUserId();
+    const assignedLabel = this.getAssignedUserLabel(record)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+
+    if (assignedLabel && ((currentName && assignedLabel === currentName) || (email && assignedLabel === email))) {
+      return true;
+    }
+
+    if (!assignedId && !record.assignedUserEmail && !record.assignedUserName) {
+      return false;
+    }
+
     if (assignedId) {
       const override = this.assignedOverrides[record.answerId];
       if (override?.email && email) {
         return override.email.trim().toLowerCase() === email;
       }
+      const currentUserId = this.getCurrentUserId();
+      if (currentUserId) {
+        return assignedId === currentUserId;
+      }
+      if (tokenUserId) {
+        return assignedId === tokenUserId;
+      }
       const assignedUser = this.users.find((user) => user.id === assignedId);
       if (assignedUser?.email && email) {
         return assignedUser.email.trim().toLowerCase() === email;
       }
+      if (assignedUser && currentName) {
+        const assignedName = this.userLabel(assignedUser)
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ');
+        if (assignedName === currentName) {
+          return true;
+        }
+      }
+      if (record.assignedUserName && currentName) {
+        const recordName = record.assignedUserName
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ');
+        if (recordName === currentName) {
+          return true;
+        }
+      }
+      if (record.assignedUserEmail && email) {
+        return record.assignedUserEmail.trim().toLowerCase() === email;
+      }
+      return false;
     }
+
     if (record.assignedUserEmail && email) {
       return record.assignedUserEmail.trim().toLowerCase() === email;
     }
-    // If not explicitly assigned, allow any user in the assigned department.
-    const recordDept = (record.assignedNc || '').trim().toLowerCase();
-    if (recordDept) {
-      const directDept = this.auth.department().trim().toLowerCase();
-      if (directDept) {
-        return recordDept === directDept;
-      }
-      const currentUserId = this.getCurrentUserId();
-      const currentUser = this.users.find((user) => user.id === currentUserId);
-      const inferredDept = String(currentUser?.department ?? '').trim().toLowerCase();
-      if (inferredDept) {
-        return recordDept === inferredDept;
+    if (record.assignedUserName && currentName) {
+      const recordName = record.assignedUserName
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+      if (recordName === currentName) {
+        return true;
       }
     }
+
     const currentUser = email
       ? this.users.find((user) => user.email.trim().toLowerCase() === email)
       : undefined;
-    if (assignedId && currentUser?.id) {
-      return assignedId === currentUser.id;
-    }
-    const currentUserId = this.getCurrentUserId();
-    if (assignedId && currentUserId) {
-      return assignedId === currentUserId;
-    }
     if (record.assignedUserName && currentUser) {
       return (
         record.assignedUserName.trim().toLowerCase() ===
@@ -332,6 +430,76 @@ export class NcManagement implements OnInit {
       );
     }
     return false;
+  }
+
+  private getTokenUserId(): number | null {
+    const token = this.auth.accessToken();
+    if (!token) {
+      return null;
+    }
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      return null;
+    }
+    try {
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+      const payloadText = atob(padded);
+      const payload = JSON.parse(payloadText) as { sub?: string | number };
+      const parsed = Number(payload?.sub);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private matchesSearch(record: NcRecord): boolean {
+    const query = this.searchQuery.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+    const haystack = [
+      record.auditCode,
+      record.auditType,
+      record.auditSubtype,
+      record.question,
+    ]
+      .map((value) => String(value ?? '').toLowerCase())
+      .join(' ');
+    return haystack.includes(query);
+  }
+
+  private visibleDepartmentRecords(): NcRecord[] {
+    const department = this.currentDepartment();
+    return this.ncService.records().filter((record) => {
+      const hasAssignedUser =
+        !!this.getAssignedUserId(record) ||
+        !!String(record.assignedUserEmail ?? '').trim() ||
+        !!String(record.assignedUserName ?? '').trim();
+      if (hasAssignedUser) {
+        return this.canPerformNc(record);
+      }
+      if (!department) {
+        return true;
+      }
+      const assignedDepartment = String(record.assignedNc ?? '').trim().toLowerCase();
+      return !!assignedDepartment && assignedDepartment === department;
+    });
+  }
+
+  private currentDepartment(): string {
+    const authDepartment = this.auth.department().trim().toLowerCase();
+    if (authDepartment) {
+      return authDepartment;
+    }
+    const email = this.auth.email().trim().toLowerCase();
+    if (!email) {
+      return '';
+    }
+    const currentUser = this.users.find(
+      (user) => String(user.email ?? '').trim().toLowerCase() === email
+    );
+    return String(currentUser?.department ?? '').trim().toLowerCase();
   }
 
   protected setTab(tab: 'flagged' | 'pending' | 'closed'): void {

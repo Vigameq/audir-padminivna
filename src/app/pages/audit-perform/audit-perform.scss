@@ -1,6 +1,7 @@
 .audit-perform {
   display: grid;
   gap: 2.5rem;
+  min-height: calc(100vh - 7.5rem);
 }
 
 .page-header {
@@ -114,6 +115,11 @@ button:disabled,
   padding: 1.5rem;
   display: grid;
   gap: 0.75rem;
+}
+
+.panel.wide {
+  min-height: calc(100vh - 19rem);
+  align-content: start;
 }
 
 .panel-header {
@@ -694,6 +700,11 @@ button:disabled,
 }
 
 @media (max-width: 720px) {
+  .audit-perform,
+  .panel.wide {
+    min-height: auto;
+  }
+
   .drawer-backdrop {
     justify-items: stretch;
   }

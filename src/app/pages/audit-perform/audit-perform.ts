@@ -30,7 +30,21 @@ export class AuditPerform implements OnInit {
   private readonly router = inject(Router);
 
   protected get audits() {
-    const audits = this.pagedAudits;
+    const audits = this.filteredAudits;
+    const startIndex = (this.currentPageIndex - 1) * this.pageSize;
+    return audits.slice(startIndex, startIndex + this.pageSize);
+  }
+
+  protected get totalCount(): number {
+    return this.filteredAudits.length;
+  }
+
+  protected get currentPageIndex(): number {
+    return Math.min(Math.max(this.pageIndex, 1), this.totalPages);
+  }
+
+  private get filteredAudits(): AuditPlanRecord[] {
+    const audits = this.allAudits;
     const start = this.filterStart ? new Date(this.filterStart) : null;
     const end = this.filterEnd ? new Date(this.filterEnd) : null;
     const filtered = audits.filter((audit) => {
@@ -107,8 +121,7 @@ export class AuditPerform implements OnInit {
   protected sortOrder: 'asc' | 'desc' = 'desc';
   protected readonly pageSize = 10;
   protected pageIndex = 1;
-  protected totalCount = 0;
-  protected pagedAudits: AuditPlanRecord[] = [];
+  protected allAudits: AuditPlanRecord[] = [];
 
   ngOnInit(): void {
     this.templateService.migrateFromLocal().subscribe();
@@ -127,7 +140,7 @@ export class AuditPerform implements OnInit {
 
   private async loadAuditByCode(code: string): Promise<void> {
     const audit =
-      this.pagedAudits.find((item) => item.code === code) ??
+      this.allAudits.find((item) => item.code === code) ??
       (await firstValueFrom(this.auditPlanService.fetchByCode(code)));
     if (!audit) {
       return;
@@ -137,10 +150,10 @@ export class AuditPerform implements OnInit {
   }
 
   private loadPage(): void {
-    this.auditPlanService.fetchPage(this.pageIndex, this.pageSize).subscribe({
-      next: ({ items, total }) => {
-        this.pagedAudits = items;
-        this.totalCount = total;
+    this.auditPlanService.syncFromApi().subscribe({
+      next: (items) => {
+        this.allAudits = items;
+        this.pageIndex = this.currentPageIndex;
       },
     });
   }
@@ -214,16 +227,19 @@ export class AuditPerform implements OnInit {
   }
 
   protected nextPage(): void {
-    this.goToPage(this.pageIndex + 1);
+    this.goToPage(this.currentPageIndex + 1);
   }
 
   protected prevPage(): void {
-    this.goToPage(this.pageIndex - 1);
+    this.goToPage(this.currentPageIndex - 1);
   }
 
   protected goToPage(page: number): void {
     this.pageIndex = Math.min(Math.max(page, 1), this.totalPages);
-    this.loadPage();
+  }
+
+  protected resetPagination(): void {
+    this.pageIndex = 1;
   }
 
   protected get departments(): string[] {

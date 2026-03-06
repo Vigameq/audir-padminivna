@@ -8,15 +8,15 @@
     <div class="header-actions">
       <label class="filter">
         From
-        <input type="date" [(ngModel)]="filterStart" name="filterStart" />
+        <input type="date" [(ngModel)]="filterStart" name="filterStart" (ngModelChange)="resetPagination()" />
       </label>
       <label class="filter">
         To
-        <input type="date" [(ngModel)]="filterEnd" name="filterEnd" />
+        <input type="date" [(ngModel)]="filterEnd" name="filterEnd" (ngModelChange)="resetPagination()" />
       </label>
       <label class="filter">
         Sort
-        <select [(ngModel)]="sortOrder" name="sortOrder">
+        <select [(ngModel)]="sortOrder" name="sortOrder" (ngModelChange)="resetPagination()">
           <option value="desc">Newest first</option>
           <option value="asc">Oldest first</option>
         </select>
@@ -77,11 +77,11 @@
       No audits created yet. Create one in Audit Plan.
     </div>
     <div class="pagination" *ngIf="totalCount > pageSize">
-      <button class="ghost small" type="button" (click)="prevPage()" [disabled]="pageIndex === 1">
+      <button class="ghost small" type="button" (click)="prevPage()" [disabled]="currentPageIndex === 1">
         Prev
       </button>
-      <span>Page {{ pageIndex }} of {{ totalPages }}</span>
-      <button class="ghost small" type="button" (click)="nextPage()" [disabled]="pageIndex === totalPages">
+      <span>Page {{ currentPageIndex }} of {{ totalPages }}</span>
+      <button class="ghost small" type="button" (click)="nextPage()" [disabled]="currentPageIndex === totalPages">
         Next
       </button>
     </div>

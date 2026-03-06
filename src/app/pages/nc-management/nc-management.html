@@ -8,32 +8,14 @@
       </p>
     </div>
     <div class="header-actions">
-      <label class="filter">
-        Severity
-        <select>
-          <option>All severities</option>
-          <option>High</option>
-          <option>Medium</option>
-          <option>Low</option>
-        </select>
-      </label>
-      <label class="filter">
-        Status
-        <select>
-          <option>All statuses</option>
-          <option>Open</option>
-          <option>In review</option>
-          <option>Resolved</option>
-        </select>
-      </label>
-      <label class="filter">
-        Assigned NC
-        <select [(ngModel)]="assignedFilter" [ngModelOptions]="{ standalone: true }">
-          <option value="">All departments</option>
-          <option *ngFor="let department of departments" [value]="department">
-            {{ department }}
-          </option>
-        </select>
+      <label class="filter search-filter">
+        Search audits
+        <input
+          type="text"
+          [(ngModel)]="searchQuery"
+          [ngModelOptions]="{ standalone: true }"
+          placeholder="Search by audit name or ID"
+        />
       </label>
       <label class="filter">
         Time range
@@ -109,7 +91,6 @@
             </div>
           </div>
           <div class="nc-inline flagged-actions">
-            <span class="status-pill medium">Submitted</span>
             <select
               class="assignee-select"
               [ngModelOptions]="{ standalone: true }"
@@ -153,14 +134,24 @@
                 {{ userLabel(user) }} ({{ user.email }})
               </option>
             </select>
-            <button
-              class="primary small"
-              type="button"
-              (click)="openRecord(record)"
-              [disabled]="!canPerformNc(record)"
-            >
-              Perform NC
-            </button>
+            <div class="action-menu">
+              <button
+                class="primary small"
+                type="button"
+                (click)="toggleActionMenu(record)"
+                [disabled]="!canPerformNc(record)"
+              >
+                Action
+              </button>
+              <div class="action-menu-list" *ngIf="isActionMenuOpen(record)">
+                <button type="button" class="action-item" (click)="chooseAction(record, 'perform')">
+                  Perform NC
+                </button>
+                <button type="button" class="action-item danger" (click)="chooseAction(record, 'reject')">
+                  Reject
+                </button>
+              </div>
+            </div>
             <a
               class="ghost small link-button"
               [routerLink]="['/lessons']"
@@ -294,28 +285,6 @@
         </div>
         <div class="response-card">
           <h3>NC response</h3>
-          <div class="response-grid">
-            <label>
-              Root Cause
-              <textarea rows="2" [(ngModel)]="ncResponse.rootCause"></textarea>
-            </label>
-            <label>
-              Containment Action
-              <textarea rows="2" [(ngModel)]="ncResponse.containmentAction"></textarea>
-            </label>
-            <label>
-              Corrective Action
-              <textarea rows="2" [(ngModel)]="ncResponse.correctiveAction"></textarea>
-            </label>
-            <label>
-              Preventive Action
-              <textarea rows="2" [(ngModel)]="ncResponse.preventiveAction"></textarea>
-            </label>
-            <label class="full">
-              G&D Summary
-              <textarea rows="2" [(ngModel)]="ncResponse.gdSummary" placeholder="Summarize gap/deviation and impact"></textarea>
-            </label>
-          </div>
           <div class="analysis-section">
             <h4>Fishbone analysis (6M)</h4>
             <div class="fishbone-canvas">
@@ -380,6 +349,28 @@
                 ></textarea>
               </label>
             </div>
+          </div>
+          <div class="response-grid">
+            <label>
+              Root Cause
+              <textarea rows="2" [(ngModel)]="ncResponse.rootCause"></textarea>
+            </label>
+            <label>
+              Containment Action
+              <textarea rows="2" [(ngModel)]="ncResponse.containmentAction"></textarea>
+            </label>
+            <label>
+              Corrective Action
+              <textarea rows="2" [(ngModel)]="ncResponse.correctiveAction"></textarea>
+            </label>
+            <label>
+              Preventive Action
+              <textarea rows="2" [(ngModel)]="ncResponse.preventiveAction"></textarea>
+            </label>
+            <label class="full">
+              G&D Summary
+              <textarea rows="2" [(ngModel)]="ncResponse.gdSummary" placeholder="Summarize gap/deviation and impact"></textarea>
+            </label>
           </div>
           <div class="response-actions">
             <label class="ghost small file-trigger">
@@ -495,6 +486,35 @@
           </div>
         </div>
       </section>
+    </aside>
+  </div>
+
+  <div class="drawer-backdrop" *ngIf="rejectRecord">
+    <aside class="reject-modal">
+      <header class="reject-modal-header">
+        <h3>Reject NC</h3>
+      </header>
+      <p class="subtitle">
+        Provide reason for rejection for
+        <strong>{{ rejectRecord?.auditCode }}</strong>.
+      </p>
+      <label class="field">
+        Reason
+        <textarea
+          rows="4"
+          maxlength="1000"
+          [(ngModel)]="rejectReason"
+          placeholder="Enter reason for rejection"
+        ></textarea>
+      </label>
+      <div class="reject-modal-actions">
+        <button class="ghost small" type="button" (click)="closeRejectModal()" [disabled]="rejectSubmitting">
+          Cancel
+        </button>
+        <button class="primary small" type="button" (click)="submitReject()" [disabled]="rejectSubmitting">
+          {{ rejectSubmitting ? 'Rejecting...' : 'Reject' }}
+        </button>
+      </div>
     </aside>
   </div>
 </section>

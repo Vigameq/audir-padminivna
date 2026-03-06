@@ -1,6 +1,6 @@
 {
   "/api": {
-    "target": "https://asia-south1-padminivna-auditx.cloudfunctions.net",
+    "target": "https://padminivna-auditx.web.app",
     "secure": true,
     "changeOrigin": true
   }
